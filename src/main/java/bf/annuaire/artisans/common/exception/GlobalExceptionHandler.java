@@ -11,6 +11,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
@@ -95,6 +96,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 path(request),
                 fieldErrors);
         return new ResponseEntity<>(body, headers, status);
+    }
+
+    /** Fichier uploadé dépassant la limite multipart -> 413 (message FR). */
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+            MaxUploadSizeExceededException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+        ApiError body = ApiError.of(
+                HttpStatus.PAYLOAD_TOO_LARGE.value(),
+                HttpStatus.PAYLOAD_TOO_LARGE.getReasonPhrase(),
+                "Fichier trop volumineux (max 5 Mo).",
+                path(request));
+        return new ResponseEntity<>(body, headers, HttpStatus.PAYLOAD_TOO_LARGE);
     }
 
     /**

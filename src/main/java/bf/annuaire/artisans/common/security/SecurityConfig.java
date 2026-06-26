@@ -31,6 +31,7 @@ public class SecurityConfig {
     /** Endpoints accessibles sans authentification. */
     private static final String[] PUBLIC_GET = {
         "/api/businesses/**", // recherche & consultation des commerces publiés
+        "/api/media/**", // téléchargement & métadonnées des fichiers (photos publiques)
     };
 
     private static final String[] PUBLIC_POST = {

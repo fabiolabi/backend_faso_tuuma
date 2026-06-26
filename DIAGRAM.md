@@ -192,6 +192,16 @@
 | **uploaded_by_user_id** | BIGINT | FK → User, nullable |
 | **created_at** | TIMESTAMPTZ | not null |
 
+> **Note de réconciliation (vs CLAUDE.md).** CLAUDE.md évoque un stockage des photos via **Cloudinary**
+> (URLs seulement). C'est **cette table `MediaFile` qui fait foi** : le stockage est **local sur le
+> système de fichiers du serveur**. `stored_path` contient un chemin relatif `yyyy/MM/uuid.ext` généré
+> côté serveur (jamais dérivé du nom client), sous le répertoire `app.media.storage-dir`
+> (`./data/media`, gitignoré). Implémenté par le package `bf.annuaire.artisans.media` : upload
+> `multipart` (`POST /api/media`, JWT), download public (`GET /api/media/{id}`). Limites : images
+> JPEG/PNG/WebP, ≤ 5 Mo. Conséquence assumée : binaires perdus à un redéploiement sans volume
+> persistant. Pour basculer vers Cloudinary, remplacer l'implémentation de `MediaStorage` et stocker
+> l'URL/public_id dans `stored_path`.
+
 ### MetierSocialMedia
 | Name | Type | Settings |
 |------|------|----------|

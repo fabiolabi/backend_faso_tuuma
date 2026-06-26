@@ -26,6 +26,21 @@
 |---------|--------|------|---------|-------------|
 | _à compléter_ | | | | |
 
+## Media (`/api/media`)
+
+> Stockage générique de fichiers. Le binaire est uploadé en `multipart/form-data` vers le backend,
+> écrit sur le système de fichiers local ; l'API renvoie une `url` de téléchargement
+> (`/api/media/{id}`). Images uniquement (JPEG, PNG, WebP), max 5 Mo.
+
+| Méthode | Chemin | Auth | Payload | Description |
+|---------|--------|------|---------|-------------|
+| POST | `/api/media` | JWT | `multipart/form-data` : `file` | Upload d'un fichier → `201` + `MediaFile` ; type non autorisé ou vide → `400` ; > 5 Mo → `413` |
+| GET | `/api/media/{id}` | Public | — | Télécharge le binaire (`Content-Type` d'origine, `inline`) ; id inconnu → `404` |
+| GET | `/api/media/{id}/info` | Public | — | Métadonnées du fichier → `200` + `MediaFile` ; id inconnu → `404` |
+| DELETE | `/api/media/{id}` | JWT | — | Supprime le fichier (auteur ou `ADMIN`) → `204` ; autre utilisateur → `403` |
+
+**`MediaFile`** : `{ id, url, originalName, contentType, sizeBytes, createdAt }`.
+
 ## Comment (`/api/comments`)
 
 | Méthode | Chemin | Auth | Payload | Description |
