@@ -1,9 +1,14 @@
 package bf.annuaire.artisans.common.security;
 
+import bf.annuaire.artisans.auth.security.AppUserDetailsService;
+import bf.annuaire.artisans.auth.security.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -11,12 +16,13 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
  * Configuration de sécurité <strong>stateless</strong> : authentification par JWT transmis dans le
  * header {@code Authorization: Bearer <token>}, jamais par cookie ni session serveur (contrainte
- * mobile). Le filtre JWT et les endpoints d'authentification seront branchés lors de
- * l'implémentation de la feature {@code auth}.
+ * mobile). Le filtre {@link JwtAuthenticationFilter} valide le Bearer avant le filtre standard ;
+ * l'{@link AuthenticationManager} (DAO + BCrypt) sert au login par mot de passe.
  */
 @Configuration
 @EnableMethodSecurity
@@ -41,7 +47,8 @@ public class SecurityConfig {
     };
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter)
+            throws Exception {
         http
                 // API + JWT par header : pas de CSRF (aucun cookie de session).
                 .csrf(csrf -> csrf.disable())
@@ -62,16 +69,26 @@ public class SecurityConfig {
                 // Requête non authentifiée sur une ressource protégée -> 401 (et non 403/redirection).
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthenticationEntryPoint()))
                 // Autorise la console H2 (frames) en dev. Sans effet en prod (console désactivée).
-                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
+                // Valide le JWT du header avant le filtre d'authentification standard.
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-        // TODO: brancher le filtre JWT (validation du Bearer) avant UsernamePasswordAuthenticationFilter
-        //       lors de l'implémentation de la feature auth.
         return http.build();
     }
 
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    /** Authentification par mot de passe (login) : charge l'utilisateur par téléphone, vérifie le BCrypt. */
+    @Bean
+    AuthenticationManager authenticationManager(
+            AppUserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder);
+        return new ProviderManager(provider);
     }
 
     /** Renvoie un 401 sec (sans corps de challenge HTTP) pour une API consommée en mobile. */
