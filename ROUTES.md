@@ -54,6 +54,24 @@
 **`MetierSummary`** : `{ id, name, phone, coverUrl, city, district, gpsLat, gpsLng, ratingAvg, ratingCount, categories: [slug], distanceKm, createdAt, updatedAt }`.
 **`MetierDetail`** : `MetierSummary` enrichi de `{ ownerUserId, description, addressDescription, address, published, active, categories: [Category], services, hours, socials, gallery }`.
 
+## Search (`/api/search`)
+
+> Recherche transverse de l'annuaire (endpoints **publics**, sur les enseignes `is_published = true AND
+> is_active = true`). Élargit la portée texte par rapport à `/api/metiers` : `q` matche le **nom** et la
+> **description** de l'enseigne, ses **prestations** (`service.name`/`description`, actives) et sa
+> **localité** (`address.city/district/sector/street`). Filtres et tri identiques à la recherche de
+> proximité (Haversine SQL natif) : avec `lat`/`lng`, tri par distance croissante (`distanceKm`
+> renseigné) ; sinon tri par note décroissante. `/api/metiers` reste inchangé.
+
+| Méthode | Chemin | Auth | Payload | Description |
+|---------|--------|------|---------|-------------|
+| GET | `/api/search` | Public | query : `q?`, `categorySlug?`, `minRating?`, `lat?`, `lng?`, `radiusKm?`, `page`, `size` | Recherche transverse paginée → `200` + page de `MetierSummary` (même format que `/api/metiers`) |
+| GET | `/api/search/suggest` | Public | query : `q`, `limit?` (défaut 10, max 20) | Autocomplétion → `200` + `[SearchSuggestion]` ; `q` vide → liste vide |
+
+**`SearchSuggestion`** : `{ type, label, value }` — `type` ∈ `CATEGORY` / `METIER` / `SERVICE`. Pour
+`CATEGORY`, `value` = `slug` (à réinjecter en `categorySlug`) ; pour `METIER`/`SERVICE`, `value` = libellé
+(à réinjecter en `q`). Suggestions plafonnées à `limit`, dédupliquées par libellé.
+
 ## Categories (`/api/categories`)
 
 > Catégorisation des enseignes (2 niveaux : `parentId = null` = racine). Lecture publique ;
