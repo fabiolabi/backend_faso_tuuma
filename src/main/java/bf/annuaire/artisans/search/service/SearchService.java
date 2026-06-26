@@ -41,7 +41,6 @@ public class SearchService {
                 .search(
                         criteria.q(),
                         criteria.categorySlug(),
-                        criteria.minRating(),
                         criteria.lat(),
                         criteria.lng(),
                         criteria.radiusKm(),

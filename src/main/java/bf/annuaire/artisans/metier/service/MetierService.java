@@ -1,5 +1,6 @@
 package bf.annuaire.artisans.metier.service;
 
+import bf.annuaire.artisans.ai.event.MetierContentChangedEvent;
 import bf.annuaire.artisans.auth.security.AuthPrincipal;
 import bf.annuaire.artisans.common.exception.BadRequestException;
 import bf.annuaire.artisans.common.exception.ResourceNotFoundException;
@@ -42,6 +43,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -50,8 +52,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Cœur métier de l'annuaire : cycle de vie d'une enseigne ({@link Metier}) et de son agrégat
  * (adresse, catégories, services, horaires, réseaux sociaux, galerie), publication et recherche de
- * proximité. Les notes ({@code metier_rating}) et le calcul de {@code ratingAvg} relèvent de la
- * feature {@code client} (notation) : ils sont ici en lecture seule.
+ * proximité. La notation est portée par les services et calculée par l'IA (features
+ * {@code client.rating} + {@code ai}) : elle est ici en lecture seule.
  */
 @org.springframework.stereotype.Service
 @RequiredArgsConstructor
@@ -69,6 +71,7 @@ public class MetierService {
     private final MetierMapper metierMapper;
     private final ServiceMapper serviceMapper;
     private final CategoryMapper categoryMapper;
+    private final ApplicationEventPublisher events;
 
     // ----------------------------------------------------------------- Recherche & lecture
 
@@ -79,7 +82,6 @@ public class MetierService {
                 .search(
                         criteria.q(),
                         criteria.categorySlug(),
-                        criteria.minRating(),
                         criteria.lat(),
                         criteria.lng(),
                         criteria.radiusKm(),
@@ -115,14 +117,18 @@ public class MetierService {
         Metier metier = new Metier();
         metier.setOwner(userRepository.getReferenceById(principal.userId()));
         applyWritableFields(metier, request);
-        return toDetail(metierRepository.save(metier));
+        Metier saved = metierRepository.save(metier);
+        events.publishEvent(new MetierContentChangedEvent(saved.getId()));
+        return toDetail(saved);
     }
 
     @Transactional
     public MetierDetailDto update(AuthPrincipal principal, Long id, UpdateMetierRequest request) {
         Metier metier = loadOwned(id, principal);
         applyWritableFields(metier, request);
-        return toDetail(metierRepository.save(metier));
+        Metier saved = metierRepository.save(metier);
+        events.publishEvent(new MetierContentChangedEvent(saved.getId()));
+        return toDetail(saved);
     }
 
     /**
@@ -153,7 +159,9 @@ public class MetierService {
     public MetierDetailDto setPublished(AuthPrincipal principal, Long id, boolean published) {
         Metier metier = loadOwned(id, principal);
         metier.setPublished(published);
-        return toDetail(metierRepository.save(metier));
+        Metier saved = metierRepository.save(metier);
+        events.publishEvent(new MetierContentChangedEvent(saved.getId()));
+        return toDetail(saved);
     }
 
     /** Suppression logique : l'enseigne disparaît de la recherche, les données sont conservées. */
@@ -178,7 +186,9 @@ public class MetierService {
         bf.annuaire.artisans.metier.entity.Service service = new bf.annuaire.artisans.metier.entity.Service();
         service.setMetier(metier);
         applyService(service, request);
-        return serviceMapper.toDto(serviceRepository.save(service));
+        ServiceDto dto = serviceMapper.toDto(serviceRepository.save(service));
+        events.publishEvent(new MetierContentChangedEvent(metierId));
+        return dto;
     }
 
     @Transactional
@@ -189,7 +199,9 @@ public class MetierService {
                 .filter(s -> s.getMetier().getId().equals(metierId))
                 .orElseThrow(() -> new ResourceNotFoundException("Prestation introuvable : " + serviceId));
         applyService(service, request);
-        return serviceMapper.toDto(serviceRepository.save(service));
+        ServiceDto dto = serviceMapper.toDto(serviceRepository.save(service));
+        events.publishEvent(new MetierContentChangedEvent(metierId));
+        return dto;
     }
 
     @Transactional
@@ -200,6 +212,7 @@ public class MetierService {
                 .filter(s -> s.getMetier().getId().equals(metierId))
                 .orElseThrow(() -> new ResourceNotFoundException("Prestation introuvable : " + serviceId));
         serviceRepository.delete(service);
+        events.publishEvent(new MetierContentChangedEvent(metierId));
     }
 
     // ----------------------------------------------------------------- Horaires
@@ -367,8 +380,6 @@ public class MetierService {
                 metierMapper.coverUrl(metier),
                 metier.getGpsLat(),
                 metier.getGpsLng(),
-                metier.getRatingAvg(),
-                metier.getRatingCount(),
                 metier.isPublished(),
                 metier.isActive(),
                 categoryMapper.toDtoList(metier.getCategories()),

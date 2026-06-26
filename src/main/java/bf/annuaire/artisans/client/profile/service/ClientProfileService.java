@@ -5,7 +5,7 @@ import bf.annuaire.artisans.client.messaging.repository.ConversationRepository;
 import bf.annuaire.artisans.client.order.entity.ServiceOrderStatus;
 import bf.annuaire.artisans.client.order.repository.ServiceOrderRepository;
 import bf.annuaire.artisans.client.profile.dto.ClientSummaryDto;
-import bf.annuaire.artisans.client.rating.repository.MetierRatingRepository;
+import bf.annuaire.artisans.client.rating.repository.ServiceRatingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ClientProfileService {
 
     private final ServiceOrderRepository orderRepository;
-    private final MetierRatingRepository ratingRepository;
+    private final ServiceRatingRepository ratingRepository;
     private final ConversationRepository conversationRepository;
 
     @Transactional(readOnly = true)

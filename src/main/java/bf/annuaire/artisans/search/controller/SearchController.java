@@ -4,9 +4,9 @@ import bf.annuaire.artisans.metier.dto.MetierSummaryDto;
 import bf.annuaire.artisans.search.dto.SearchCriteria;
 import bf.annuaire.artisans.search.dto.SearchSuggestionDto;
 import bf.annuaire.artisans.search.service.SearchService;
+import bf.annuaire.artisans.search.service.SemanticSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.math.BigDecimal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -31,20 +31,34 @@ public class SearchController {
     private static final int MAX_SUGGESTIONS = 20;
 
     private final SearchService searchService;
+    private final SemanticSearchService semanticSearchService;
 
     @Operation(summary = "Recherche transverse paginée (nom, description, prestations, localité)")
     @GetMapping
     public Page<MetierSummaryDto> search(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String categorySlug,
-            @RequestParam(required = false) BigDecimal minRating,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false) Double radiusKm,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        SearchCriteria criteria = new SearchCriteria(q, categorySlug, minRating, lat, lng, radiusKm);
+        SearchCriteria criteria = new SearchCriteria(q, categorySlug, lat, lng, radiusKm);
         return searchService.search(criteria, PageRequest.of(page, size));
+    }
+
+    @Operation(summary = "Recherche sémantique (par le sens) — repli mots-clés si l'IA est indisponible")
+    @GetMapping("/semantic")
+    public Page<MetierSummaryDto> semantic(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String categorySlug,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng,
+            @RequestParam(required = false) Double radiusKm,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        SearchCriteria criteria = new SearchCriteria(q, categorySlug, lat, lng, radiusKm);
+        return semanticSearchService.search(criteria, PageRequest.of(page, size));
     }
 
     @Operation(summary = "Suggestions d'autocomplétion (catégories, enseignes, prestations)")

@@ -25,10 +25,11 @@ import lombok.Setter;
  * Enseigne / commerce d'un artisan (table {@code metier}) — entité centrale de l'annuaire.
  *
  * <p>Appartient à un {@link User} ({@code owner}, rôle ARTISAN). Reste {@code published = false} à la
- * création : invisible en recherche tant que le propriétaire ne l'a pas publiée explicitement.
- * {@code ratingAvg} / {@code ratingCount} sont <strong>dénormalisés</strong> (alimentés par la
- * feature {@code comment} via {@code metier_rating}) et servent au tri et au filtre « qualité ».
- * Hérite de {@code createdAt} / {@code updatedAt} (delta-sync mobile) via {@link AbstractAuditingEntity}.
+ * création : invisible en recherche tant que le propriétaire ne l'a pas publiée explicitement. La
+ * notation est désormais portée par les <strong>services</strong> (l'enseigne n'a plus de note
+ * propre) ; {@code searchEmbedding} est le vecteur sémantique (JSON) alimenté par la feature
+ * {@code ai} pour la recherche par le sens. Hérite de {@code createdAt} / {@code updatedAt}
+ * (delta-sync mobile) via {@link AbstractAuditingEntity}.
  */
 @Entity
 @Table(name = "metier")
@@ -72,11 +73,12 @@ public class Metier extends AbstractAuditingEntity {
     @Column(name = "gps_lng", precision = 9, scale = 6)
     private BigDecimal gpsLng;
 
-    @Column(name = "rating_avg", nullable = false, precision = 2, scale = 1)
-    private BigDecimal ratingAvg = BigDecimal.ZERO;
+    /** Vecteur d'embedding sérialisé en JSON (recherche sémantique, feature {@code ai}). */
+    @Column(name = "search_embedding", columnDefinition = "TEXT")
+    private String searchEmbedding;
 
-    @Column(name = "rating_count", nullable = false)
-    private int ratingCount = 0;
+    @Column(name = "embedding_updated_at")
+    private java.time.Instant embeddingUpdatedAt;
 
     @Column(name = "is_published", nullable = false)
     private boolean published = false;

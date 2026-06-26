@@ -25,12 +25,13 @@
 > Annuaire géolocalisé des enseignes d'artisans. Une enseigne naît `is_published = false`
 > (invisible en recherche) et appartient à un utilisateur `ARTISAN`. La recherche de proximité est
 > un tri Haversine (SQL natif) sur les enseignes publiées et actives. La gestion (mutation) est
-> réservée au **propriétaire** ou à un **ADMIN** ; les notes (`rating_avg`/`rating_count`) sont en
-> lecture seule (alimentées par la feature `client` — notation, voir plus bas).
+> réservée au **propriétaire** ou à un **ADMIN**. La notation est désormais portée par les
+> **prestations** (note IA, voir « Client — Notation des prestations ») : l'enseigne n'a plus de note
+> globale propre, et il n'y a plus de filtre « qualité » au niveau enseigne.
 
 | Méthode | Chemin | Auth | Payload | Description |
 |---------|--------|------|---------|-------------|
-| GET | `/api/metiers` | Public | query : `q?`, `categorySlug?`, `minRating?`, `lat?`, `lng?`, `radiusKm?`, `page`, `size` | Recherche paginée (publiées) → `200` + page de `MetierSummary`. Avec `lat`/`lng` : tri par distance croissante (`distanceKm` renseigné) |
+| GET | `/api/metiers` | Public | query : `q?`, `categorySlug?`, `lat?`, `lng?`, `radiusKm?`, `page`, `size` | Recherche paginée (publiées) → `200` + page de `MetierSummary`. Avec `lat`/`lng` : tri par distance croissante (`distanceKm` renseigné), sinon par nom |
 | GET | `/api/metiers/mine` | JWT | query : `page`, `size` | Mes enseignes (publiées ou non) → `200` + page de `MetierSummary` |
 | GET | `/api/metiers/{id}` | Public | — | Détail → `200` + `MetierDetail` ; non publiée et non propriétaire/ADMIN → `404` |
 | POST | `/api/metiers` | JWT (ARTISAN) | `CreateMetier` | Création (`is_published=false`) → `201` + `MetierDetail` ; rôle insuffisant → `403` |
@@ -38,7 +39,7 @@
 | POST | `/api/metiers/{id}/publish` | JWT (proprio/ADMIN) | — | Publie l'enseigne → `200` + `MetierDetail` |
 | POST | `/api/metiers/{id}/unpublish` | JWT (proprio/ADMIN) | — | Dépublie l'enseigne → `200` + `MetierDetail` |
 | DELETE | `/api/metiers/{id}` | JWT (proprio/ADMIN) | — | Suppression logique (`is_active=false`) → `204` |
-| GET | `/api/metiers/{id}/services` | Public | — | Prestations → `200` + `[Service]` |
+| GET | `/api/metiers/{id}/services` | Public | — | Prestations (avec note IA `ratingAvg`/`ratingCount` + `aiSummary`) → `200` + `[Service]` |
 | POST | `/api/metiers/{id}/services` | JWT (proprio/ADMIN) | `{ name, description?, priceMin?, priceMax?, active? }` | Ajout d'une prestation → `201` + `Service` |
 | PUT | `/api/metiers/{id}/services/{serviceId}` | JWT (proprio/ADMIN) | idem | Mise à jour → `200` + `Service` |
 | DELETE | `/api/metiers/{id}/services/{serviceId}` | JWT (proprio/ADMIN) | — | Suppression → `204` |
@@ -51,8 +52,9 @@
 | DELETE | `/api/metiers/{id}/gallery/{galleryId}` | JWT (proprio/ADMIN) | — | Retire une image → `204` |
 
 **`CreateMetier` / `UpdateMetier`** : `{ name, phone?, description?, addressDescription?, address?: { city, district?, sector?, street? }, gpsLat?, gpsLng?, categoryIds?: [..], coverFileId? }`.
-**`MetierSummary`** : `{ id, name, phone, coverUrl, city, district, gpsLat, gpsLng, ratingAvg, ratingCount, categories: [slug], distanceKm, createdAt, updatedAt }`.
+**`MetierSummary`** : `{ id, name, phone, coverUrl, city, district, gpsLat, gpsLng, categories: [slug], distanceKm, createdAt, updatedAt }`.
 **`MetierDetail`** : `MetierSummary` enrichi de `{ ownerUserId, description, addressDescription, address, published, active, categories: [Category], services, hours, socials, gallery }`.
+**`Service`** : `{ id, name, description, priceMin, priceMax, active, ratingAvg, ratingCount, aiSummary }` — `ratingAvg`/`ratingCount`/`aiSummary` en lecture seule (calculés par l'IA).
 
 ## Search (`/api/search`)
 
@@ -61,11 +63,17 @@
 > **description** de l'enseigne, ses **prestations** (`service.name`/`description`, actives) et sa
 > **localité** (`address.city/district/sector/street`). Filtres et tri identiques à la recherche de
 > proximité (Haversine SQL natif) : avec `lat`/`lng`, tri par distance croissante (`distanceKm`
-> renseigné) ; sinon tri par note décroissante. `/api/metiers` reste inchangé.
+> renseigné) ; sinon tri par nom. `/api/metiers` reste inchangé.
+>
+> **Recherche sémantique** (`/api/search/semantic`) : classe les enseignes par **sens** (embeddings
+> Gemini + similarité cosinus calculée côté serveur), pas seulement par mots-clés. Repli automatique
+> sur la recherche mots-clés si l'IA est désactivée, si `q` est vide ou si aucune enseigne n'est
+> encore indexée.
 
 | Méthode | Chemin | Auth | Payload | Description |
 |---------|--------|------|---------|-------------|
-| GET | `/api/search` | Public | query : `q?`, `categorySlug?`, `minRating?`, `lat?`, `lng?`, `radiusKm?`, `page`, `size` | Recherche transverse paginée → `200` + page de `MetierSummary` (même format que `/api/metiers`) |
+| GET | `/api/search` | Public | query : `q?`, `categorySlug?`, `lat?`, `lng?`, `radiusKm?`, `page`, `size` | Recherche transverse paginée → `200` + page de `MetierSummary` (même format que `/api/metiers`) |
+| GET | `/api/search/semantic` | Public | query : `q?`, `categorySlug?`, `lat?`, `lng?`, `radiusKm?`, `page`, `size` | Recherche sémantique paginée (tri par pertinence de sens) → `200` + page de `MetierSummary` ; repli mots-clés si l'IA est indisponible |
 | GET | `/api/search/suggest` | Public | query : `q`, `limit?` (défaut 10, max 20) | Autocomplétion → `200` + `[SearchSuggestion]` ; `q` vide → liste vide |
 
 **`SearchSuggestion`** : `{ type, label, value }` — `type` ∈ `CATEGORY` / `METIER` / `SERVICE`. Pour
@@ -124,22 +132,25 @@
 **`CreateServiceOrder`** : `{ metierId, serviceId?, message?, requestedDate? }`.
 **`ServiceOrder`** : `{ id, metierId, metierName, serviceId, serviceName, clientUserId, clientName, message, requestedDate, status, createdAt, updatedAt }`.
 
-## Client — Notation des enseignes (`/api/metiers/{id}/ratings`, `/api/client/ratings`)
+## Client — Notation des prestations (`/api/services/{serviceId}/ratings`, `/api/client/ratings`)
 
-> Notation `metier_rating` portée par la feature `client` (remplace l'ancien modèle `comment`/Gemini).
-> Un client note une enseigne **publiée** de 1 à 5 (+ commentaire), **une seule fois** par enseigne
-> (upsert). Chaque écriture/suppression recalcule `metier.rating_avg`/`rating_count`. Les avis sont
-> publics en lecture (sous le préfixe public `/api/metiers/**`). Noter sa propre enseigne → `400`.
+> Notation `service_rating` portée par la feature `client` : les avis portent sur les **prestations**
+> (et non sur l'enseigne). Un client note une prestation **visible** (active, d'une enseigne publiée)
+> de 1 à 5 (+ commentaire), **une seule fois** par prestation (upsert). L'avis est enregistré
+> immédiatement au statut `PENDING` ; **l'IA (Gemini) l'analyse en asynchrone** (sentiment, décalage
+> note/texte, faux avis, grossièreté) puis recalcule la **note pondérée** du service et sa synthèse.
+> Seuls les avis `APPROVED` sont publics et comptés dans la note ; les avis faux/inappropriés passent
+> `REJECTED` (masqués, exclus). Noter sa propre prestation → `400`.
 
 | Méthode | Chemin | Auth | Payload | Description |
 |---------|--------|------|---------|-------------|
-| GET | `/api/metiers/{id}/ratings` | Public | query : `page`, `size` | Avis publics d'une enseigne → `200` + page de `MetierRating` |
-| POST | `/api/metiers/{id}/ratings` | JWT (CLIENT) | `Rating` | Dépose/met à jour ma note (upsert) → `200` + `MetierRating` ; auto-notation → `400` |
-| DELETE | `/api/metiers/{id}/ratings/mine` | JWT (CLIENT) | — | Supprime ma note → `204` ; aucune note → `404` |
-| GET | `/api/client/ratings` | JWT (CLIENT) | query : `page`, `size` | Mes notes → `200` + page de `MetierRating` |
+| GET | `/api/services/{serviceId}/ratings` | Public | query : `page`, `size` | Avis publics (approuvés) d'une prestation → `200` + page de `ServiceRating` |
+| POST | `/api/services/{serviceId}/ratings` | JWT (CLIENT) | `Rating` | Dépose/met à jour mon avis (upsert, statut `PENDING`) → `200` + `ServiceRating` ; auto-notation → `400` |
+| DELETE | `/api/services/{serviceId}/ratings/mine` | JWT (CLIENT) | — | Supprime mon avis (recalcul async) → `204` ; aucun avis → `404` |
+| GET | `/api/client/ratings` | JWT (CLIENT) | query : `page`, `size` | Mes avis (tous statuts) → `200` + page de `ServiceRating` |
 
 **`Rating`** : `{ rating (1-5), comment? }`.
-**`MetierRating`** : `{ id, metierId, metierName, clientUserId, clientName, rating, comment, createdAt }`.
+**`ServiceRating`** : `{ id, serviceId, serviceName, clientUserId, clientName, starRating, comment, aiRating, sentimentLabel, mismatch, status, createdAt }` — `aiRating`/`sentimentLabel`/`mismatch`/`status` renseignés par l'IA (asynchrone).
 
 ## Client — Messagerie (`/api/conversations`)
 
@@ -171,9 +182,11 @@
 
 ## Comment (`/api/comments`)
 
-> **Remplacé par la feature `client` (notation).** La notation `metier_rating` est désormais portée par
-> `POST /api/metiers/{id}/ratings` (voir « Client — Notation »). La piste « notation automatique Gemini »
-> n'a pas de table dédiée dans le schéma et reste à arbitrer ; aucun endpoint `/api/comments`.
+> **Remplacé par la notation IA des prestations.** Les avis sont portés par `service_rating`
+> (`POST /api/services/{serviceId}/ratings`, voir « Client — Notation des prestations »). La « notation
+> automatique » est implémentée par la feature `ai` (Gemini, asynchrone) : sentiment, décalage
+> note/texte, détection de faux avis et de grossièreté, synthèse, et recherche sémantique. Aucun
+> endpoint `/api/comments`.
 
 ## Device (`/api/devices`)
 

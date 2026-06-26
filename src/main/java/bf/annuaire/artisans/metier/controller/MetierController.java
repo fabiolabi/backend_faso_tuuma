@@ -16,7 +16,6 @@ import bf.annuaire.artisans.metier.service.MetierService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.math.BigDecimal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -54,13 +53,12 @@ public class MetierController {
     public Page<MetierSummaryDto> search(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String categorySlug,
-            @RequestParam(required = false) BigDecimal minRating,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false) Double radiusKm,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        MetierSearchCriteria criteria = new MetierSearchCriteria(q, categorySlug, minRating, lat, lng, radiusKm);
+        MetierSearchCriteria criteria = new MetierSearchCriteria(q, categorySlug, lat, lng, radiusKm);
         return metierService.search(criteria, PageRequest.of(page, size));
     }
 

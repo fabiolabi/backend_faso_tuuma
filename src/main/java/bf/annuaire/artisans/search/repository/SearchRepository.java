@@ -1,7 +1,6 @@
 package bf.annuaire.artisans.search.repository;
 
 import bf.annuaire.artisans.metier.entity.Metier;
-import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -43,7 +42,6 @@ public interface SearchRepository extends JpaRepository<Metier, Long> {
                          OR EXISTS (SELECT 1 FROM service s WHERE s.metier_id = m.id AND s.is_active = TRUE AND (
                                LOWER(s.name) LIKE LOWER(CONCAT('%', :q, '%'))
                             OR LOWER(s.description) LIKE LOWER(CONCAT('%', :q, '%'))))))
-                      AND (:minRating IS NULL OR m.rating_avg >= :minRating)
                       AND (:categorySlug IS NULL OR EXISTS (
                             SELECT 1 FROM metier_category mc
                             JOIN category c ON c.id = mc.category_id
@@ -59,7 +57,7 @@ public interface SearchRepository extends JpaRepository<Metier, Long> {
                           * cos(radians(m.gps_lng) - radians(:lng))
                           + sin(radians(:lat)) * sin(radians(m.gps_lat))))
                       END ASC,
-                      m.rating_avg DESC
+                      m.name ASC
                     """,
             countQuery =
                     """
@@ -76,7 +74,6 @@ public interface SearchRepository extends JpaRepository<Metier, Long> {
                          OR EXISTS (SELECT 1 FROM service s WHERE s.metier_id = m.id AND s.is_active = TRUE AND (
                                LOWER(s.name) LIKE LOWER(CONCAT('%', :q, '%'))
                             OR LOWER(s.description) LIKE LOWER(CONCAT('%', :q, '%'))))))
-                      AND (:minRating IS NULL OR m.rating_avg >= :minRating)
                       AND (:categorySlug IS NULL OR EXISTS (
                             SELECT 1 FROM metier_category mc
                             JOIN category c ON c.id = mc.category_id
@@ -91,7 +88,6 @@ public interface SearchRepository extends JpaRepository<Metier, Long> {
     Page<Metier> search(
             @Param("q") String q,
             @Param("categorySlug") String categorySlug,
-            @Param("minRating") BigDecimal minRating,
             @Param("lat") Double lat,
             @Param("lng") Double lng,
             @Param("radiusKm") Double radiusKm,

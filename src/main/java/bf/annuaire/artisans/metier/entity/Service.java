@@ -15,7 +15,9 @@ import lombok.Setter;
 
 /**
  * Prestation proposée par une enseigne (table {@code service}). Fourchette de prix optionnelle en
- * FCFA ({@code priceMin}/{@code priceMax}). Pas de colonnes d'audit.
+ * FCFA ({@code priceMin}/{@code priceMax}). Porte la note calculée par l'IA ({@code ratingAvg} /
+ * {@code ratingCount}, dénormalisés et alimentés par la feature {@code ai} à partir des
+ * {@code service_rating}) et la synthèse d'avis {@code aiSummary}. Pas de colonnes d'audit.
  */
 @Entity
 @Table(name = "service")
@@ -46,4 +48,18 @@ public class Service {
 
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
+
+    /** Note globale calculée par l'IA (0.0 si aucun avis approuvé), dénormalisée. */
+    @Column(name = "rating_avg", nullable = false, precision = 2, scale = 1)
+    private java.math.BigDecimal ratingAvg = java.math.BigDecimal.ZERO;
+
+    @Column(name = "rating_count", nullable = false)
+    private int ratingCount = 0;
+
+    /** Synthèse textuelle des avis (générée par l'IA), ou {@code null}. */
+    @Column(name = "ai_summary", columnDefinition = "TEXT")
+    private String aiSummary;
+
+    @Column(name = "ai_summary_updated_at")
+    private java.time.Instant aiSummaryUpdatedAt;
 }
