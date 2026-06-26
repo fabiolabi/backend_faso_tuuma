@@ -12,7 +12,6 @@ import java.util.Set;
 public record MetierSummaryDto(
         Long id,
         String name,
-        String phone,
         String coverUrl,
         String city,
         String district,

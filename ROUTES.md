@@ -47,14 +47,22 @@
 | PUT | `/api/metiers/{id}/hours` | JWT (proprio/ADMIN) | `[{ day, openHour?, closeHour?, open }]` | Remplace tous les horaires (1 max/jour) → `200` + `[Hourly]` |
 | GET | `/api/metiers/{id}/socials` | Public | — | Réseaux sociaux → `200` + `[SocialMedia]` |
 | PUT | `/api/metiers/{id}/socials` | JWT (proprio/ADMIN) | `[{ platform, url }]` | Remplace tous les liens → `200` + `[SocialMedia]` |
+| GET | `/api/metiers/{id}/phones` | Public | — | Numéros de contact → `200` + `[MetierPhone]` |
+| PUT | `/api/metiers/{id}/phones` | JWT (proprio/ADMIN) | `[{ number, whatsapp?, label? }]` | Remplace tous les numéros → `200` + `[MetierPhone]` ; numéro vide → `400` |
 | GET | `/api/metiers/{id}/gallery` | Public | — | Galerie → `200` + `[GalleryItem]` |
 | POST | `/api/metiers/{id}/gallery` | JWT (proprio/ADMIN) | `{ fileId, position? }` | Ajoute une image (réf. `media`) → `201` + `GalleryItem` |
 | DELETE | `/api/metiers/{id}/gallery/{galleryId}` | JWT (proprio/ADMIN) | — | Retire une image → `204` |
 
-**`CreateMetier` / `UpdateMetier`** : `{ name, phone?, description?, addressDescription?, address?: { city, district?, sector?, street? }, gpsLat?, gpsLng?, categoryIds?: [..], coverFileId? }`.
-**`MetierSummary`** : `{ id, name, phone, coverUrl, city, district, gpsLat, gpsLng, categories: [slug], distanceKm, createdAt, updatedAt }`.
-**`MetierDetail`** : `MetierSummary` enrichi de `{ ownerUserId, description, addressDescription, address, published, active, categories: [Category], services, hours, socials, gallery }`.
+**`CreateMetier` / `UpdateMetier`** : `{ name, description?, addressDescription?, address?: { city, district?, sector?, street? }, gpsLat?, gpsLng?, categoryIds?: [..], coverFileId? }`. Les numéros de téléphone se gèrent via `PUT /api/metiers/{id}/phones` (plus de champ `phone` ici).
+**`MetierSummary`** : `{ id, name, coverUrl, city, district, gpsLat, gpsLng, categories: [slug], distanceKm, createdAt, updatedAt }`.
+**`MetierDetail`** : `MetierSummary` enrichi de `{ ownerUserId, phones: [MetierPhone], description, addressDescription, address, published, active, categories: [Category], services, hours, socials, gallery }`.
+**`MetierPhone`** : `{ number, whatsapp, label }` — `whatsapp = true` si le numéro est joignable sur WhatsApp.
 **`Service`** : `{ id, name, description, priceMin, priceMax, active, ratingAvg, ratingCount, aiSummary }` — `ratingAvg`/`ratingCount`/`aiSummary` en lecture seule (calculés par l'IA).
+
+> **Changement de contrat (V5)** : l'enseigne supporte désormais **plusieurs numéros** (`metier_phone`),
+> chacun marqué ou non comme WhatsApp. L'ancien champ unique `phone` (sur `CreateMetier`/`UpdateMetier`/
+> `MetierSummary`/`MetierDetail`) est retiré au profit de la sous-ressource `phones` et des endpoints
+> `GET`/`PUT /api/metiers/{id}/phones`.
 
 ## Search (`/api/search`)
 
@@ -180,6 +188,18 @@
 
 **`ClientSummary`** : `{ ordersPending, ordersAccepted, ordersCompleted, ordersRejected, ordersCancelled, ratingsCount, conversationsCount }`.
 
+## Client — Favoris (`/api/client/favorites`)
+
+> Tout utilisateur **authentifié** peut mettre une enseigne **publiée** en favori et lister ses
+> favoris. Au plus une fois par enseigne (idempotent). La liste renvoie des `MetierSummary` (mêmes
+> cartes que la recherche), les plus récemment ajoutés d'abord.
+
+| Méthode | Chemin | Auth | Payload | Description |
+|---------|--------|------|---------|-------------|
+| GET | `/api/client/favorites` | JWT | query : `page`, `size` | Mes enseignes favorites → `200` + page de `MetierSummary` |
+| POST | `/api/client/favorites/{metierId}` | JWT | — | Ajoute aux favoris (idempotent) → `204` ; enseigne non publiée → `404` |
+| DELETE | `/api/client/favorites/{metierId}` | JWT | — | Retire des favoris (idempotent) → `204` |
+
 ## Comment (`/api/comments`)
 
 > **Remplacé par la notation IA des prestations.** Les avis sont portés par `service_rating`
@@ -190,12 +210,35 @@
 
 ## Device (`/api/devices`)
 
+> Tokens FCM des appareils de l'utilisateur, cibles des notifications push. **Authentification
+> requise** : le token est rattaché à l'utilisateur courant. Le mobile (ré)enregistre son token au
+> login / au lancement de l'app et le désenregistre au logout. Enregistrement en **upsert** par token
+> (un appareil partagé est réattribué à l'utilisateur courant). Les tokens rejetés par FCM sont purgés
+> automatiquement à l'envoi.
+
 | Méthode | Chemin | Auth | Payload | Description |
 |---------|--------|------|---------|-------------|
-| _à compléter_ | | | | |
+| POST | `/api/devices` | JWT | `RegisterDevice` | Enregistre ou rafraîchit le token de l'appareil → `200` + `DeviceToken` |
+| GET | `/api/devices` | JWT | — | Mes appareils enregistrés → `200` + `[DeviceToken]` |
+| DELETE | `/api/devices/{fcmToken}` | JWT | — | Désenregistre un token (le mien) → `204` |
+
+**`RegisterDevice`** : `{ fcmToken, platform? }` — `platform` ∈ `ANDROID` / `IOS` / `WEB`.
+**`DeviceToken`** : `{ id, fcmToken, platform, lastSeenAt, createdAt }`.
 
 ## Notification (`/api/notifications`)
 
+> Centre de notifications de l'utilisateur courant. **Authentification requise.** L'envoi push est
+> automatique (déclenché en asynchrone par les évènements métier : **nouvel avis** → propriétaire de
+> l'enseigne, **statut de demande changé** → client, **nouveau message** → destinataire). Chaque
+> notification est aussi persistée pour relecture (badge non-lus, historique). En dev/test
+> (`app.notification.enabled=false`), l'envoi push retombe sur un émetteur NoOp mais l'historique reste
+> alimenté.
+
 | Méthode | Chemin | Auth | Payload | Description |
 |---------|--------|------|---------|-------------|
-| _à compléter_ | | | | |
+| GET | `/api/notifications` | JWT | query : `page`, `size` | Mes notifications (récentes d'abord) → `200` + page de `Notification` |
+| GET | `/api/notifications/unread-count` | JWT | — | Nombre de non-lues → `200` + `{ count }` |
+| PATCH | `/api/notifications/{id}/read` | JWT | — | Marque une notification comme lue → `200` + `Notification` ; pas la mienne → `404` |
+| PATCH | `/api/notifications/read-all` | JWT | — | Marque toutes mes notifications comme lues → `200` |
+
+**`Notification`** : `{ id, type, title, body, dataJson, read, createdAt }` — `type` ∈ `NEW_REVIEW` / `ORDER_STATUS` / `NEW_MESSAGE` ; `dataJson` = charge utile de navigation (ids cibles) ; `read = true` si déjà lue.

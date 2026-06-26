@@ -14,7 +14,6 @@ import java.util.Set;
  */
 public record CreateMetierRequest(
         @NotBlank @Size(max = 255) String name,
-        @Size(max = 30) String phone,
         String description,
         String addressDescription,
         @Valid AddressDto address,

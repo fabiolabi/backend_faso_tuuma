@@ -11,8 +11,6 @@ import java.util.Set;
 public interface MetierWriteRequest {
     String name();
 
-    String phone();
-
     String description();
 
     String addressDescription();

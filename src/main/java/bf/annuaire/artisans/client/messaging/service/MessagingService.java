@@ -14,10 +14,13 @@ import bf.annuaire.artisans.client.messaging.repository.MessageRepository;
 import bf.annuaire.artisans.common.exception.ResourceNotFoundException;
 import bf.annuaire.artisans.metier.entity.Metier;
 import bf.annuaire.artisans.metier.repository.MetierRepository;
+import bf.annuaire.artisans.notification.event.MessageSentEvent;
 import bf.annuaire.artisans.user.entity.RoleName;
+import bf.annuaire.artisans.user.entity.User;
 import bf.annuaire.artisans.user.repository.UserRepository;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -39,6 +42,7 @@ public class MessagingService {
     private final MetierRepository metierRepository;
     private final UserRepository userRepository;
     private final MessageMapper messageMapper;
+    private final ApplicationEventPublisher events;
 
     /** Démarre ou récupère le fil du client courant avec une enseigne ; envoie éventuellement un 1er message. */
     @Transactional
@@ -56,6 +60,7 @@ public class MessagingService {
                 });
         if (request.firstMessage() != null && !request.firstMessage().isBlank()) {
             appendMessage(conversation, principal.userId(), request.firstMessage());
+            publishMessageSent(conversation, principal.userId(), request.firstMessage());
         }
         return toDto(conversation, principal.userId());
     }
@@ -87,6 +92,7 @@ public class MessagingService {
     public MessageDto send(AuthPrincipal principal, Long conversationId, SendMessageRequest request) {
         Conversation conversation = loadParticipating(conversationId, principal);
         Message message = appendMessage(conversation, principal.userId(), request.body());
+        publishMessageSent(conversation, principal.userId(), request.body());
         return messageMapper.toDto(message);
     }
 
@@ -110,6 +116,17 @@ public class MessagingService {
         conversation.setLastMessageAt(now);
         conversationRepository.save(conversation);
         return saved;
+    }
+
+    /** Publie l'évènement de message à destination de l'autre participant (notification push asynchrone). */
+    private void publishMessageSent(Conversation conversation, Long senderId, String body) {
+        Long clientId = conversation.getClient().getId();
+        Long ownerId = conversation.getMetier().getOwner().getId();
+        boolean senderIsClient = senderId.equals(clientId);
+        Long recipientId = senderIsClient ? ownerId : clientId;
+        User sender = senderIsClient ? conversation.getClient() : conversation.getMetier().getOwner();
+        events.publishEvent(
+                new MessageSentEvent(conversation.getId(), recipientId, PersonNames.fullName(sender), truncate(body)));
     }
 
     private ConversationDto toDto(Conversation conversation, Long readerId) {

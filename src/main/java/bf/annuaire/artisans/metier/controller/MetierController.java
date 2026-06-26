@@ -6,6 +6,7 @@ import bf.annuaire.artisans.metier.dto.CreateMetierRequest;
 import bf.annuaire.artisans.metier.dto.GalleryItemDto;
 import bf.annuaire.artisans.metier.dto.HourlyDto;
 import bf.annuaire.artisans.metier.dto.MetierDetailDto;
+import bf.annuaire.artisans.metier.dto.MetierPhoneDto;
 import bf.annuaire.artisans.metier.dto.MetierSearchCriteria;
 import bf.annuaire.artisans.metier.dto.MetierSummaryDto;
 import bf.annuaire.artisans.metier.dto.ServiceDto;
@@ -183,6 +184,23 @@ public class MetierController {
             @Valid @RequestBody List<SocialMediaDto> socials,
             @AuthenticationPrincipal AuthPrincipal principal) {
         return metierService.replaceSocials(principal, id, socials);
+    }
+
+    // ------------------------------------------------------------------- Numéros de téléphone
+
+    @Operation(summary = "Numéros de contact d'une enseigne")
+    @GetMapping("/{id}/phones")
+    public List<MetierPhoneDto> phones(@PathVariable Long id, @AuthenticationPrincipal AuthPrincipal principal) {
+        return metierService.listPhones(id, principal);
+    }
+
+    @Operation(summary = "Remplacement des numéros de contact (propriétaire ou ADMIN)")
+    @PutMapping("/{id}/phones")
+    public List<MetierPhoneDto> replacePhones(
+            @PathVariable Long id,
+            @Valid @RequestBody List<MetierPhoneDto> phones,
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return metierService.replacePhones(principal, id, phones);
     }
 
     // ------------------------------------------------------------------- Galerie

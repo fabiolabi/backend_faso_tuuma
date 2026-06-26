@@ -13,9 +13,11 @@ import bf.annuaire.artisans.metier.entity.Metier;
 import bf.annuaire.artisans.metier.entity.Service;
 import bf.annuaire.artisans.metier.repository.MetierRepository;
 import bf.annuaire.artisans.metier.repository.ServiceRepository;
+import bf.annuaire.artisans.notification.event.OrderStatusChangedEvent;
 import bf.annuaire.artisans.user.entity.RoleName;
 import bf.annuaire.artisans.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -35,6 +37,7 @@ public class ServiceOrderService {
     private final ServiceRepository serviceRepository;
     private final UserRepository userRepository;
     private final ServiceOrderMapper orderMapper;
+    private final ApplicationEventPublisher events;
 
     // ----------------------------------------------------------------- Côté client
 
@@ -99,7 +102,10 @@ public class ServiceOrderService {
             throw new BadRequestException("Transition de statut invalide : " + order.getStatus() + " → " + target + ".");
         }
         order.setStatus(target);
-        return orderMapper.toDto(orderRepository.save(order));
+        ServiceOrderDto dto = orderMapper.toDto(orderRepository.save(order));
+        events.publishEvent(new OrderStatusChangedEvent(
+                order.getId(), order.getClient().getId(), target.name(), order.getMetier().getName()));
+        return dto;
     }
 
     // ----------------------------------------------------------------- Helpers internes

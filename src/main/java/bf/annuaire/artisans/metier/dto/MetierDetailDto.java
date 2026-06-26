@@ -13,7 +13,7 @@ public record MetierDetailDto(
         Long id,
         Long ownerUserId,
         String name,
-        String phone,
+        List<MetierPhoneDto> phones,
         String description,
         String addressDescription,
         AddressDto address,

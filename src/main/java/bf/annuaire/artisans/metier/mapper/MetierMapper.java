@@ -3,6 +3,7 @@ package bf.annuaire.artisans.metier.mapper;
 import bf.annuaire.artisans.metier.dto.AddressDto;
 import bf.annuaire.artisans.metier.dto.GalleryItemDto;
 import bf.annuaire.artisans.metier.dto.HourlyDto;
+import bf.annuaire.artisans.metier.dto.MetierPhoneDto;
 import bf.annuaire.artisans.metier.dto.MetierSummaryDto;
 import bf.annuaire.artisans.metier.dto.SocialMediaDto;
 import bf.annuaire.artisans.metier.entity.Address;
@@ -10,6 +11,7 @@ import bf.annuaire.artisans.metier.entity.Category;
 import bf.annuaire.artisans.metier.entity.Hourly;
 import bf.annuaire.artisans.metier.entity.Metier;
 import bf.annuaire.artisans.metier.entity.MetierGallery;
+import bf.annuaire.artisans.metier.entity.MetierPhone;
 import bf.annuaire.artisans.metier.entity.MetierSocialMedia;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -44,6 +46,10 @@ public interface MetierMapper {
     SocialMediaDto toSocialDto(MetierSocialMedia socialMedia);
 
     List<SocialMediaDto> toSocialDtoList(List<MetierSocialMedia> socials);
+
+    MetierPhoneDto toPhoneDto(MetierPhone phone);
+
+    List<MetierPhoneDto> toPhoneDtoList(List<MetierPhone> phones);
 
     @Mapping(target = "fileId", source = "file.id")
     @Mapping(target = "url", expression = "java(\"/api/media/\" + gallery.getFile().getId())")

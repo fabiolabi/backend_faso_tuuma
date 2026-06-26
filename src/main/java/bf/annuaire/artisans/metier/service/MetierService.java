@@ -12,6 +12,7 @@ import bf.annuaire.artisans.metier.dto.CreateMetierRequest;
 import bf.annuaire.artisans.metier.dto.GalleryItemDto;
 import bf.annuaire.artisans.metier.dto.HourlyDto;
 import bf.annuaire.artisans.metier.dto.MetierDetailDto;
+import bf.annuaire.artisans.metier.dto.MetierPhoneDto;
 import bf.annuaire.artisans.metier.dto.MetierSearchCriteria;
 import bf.annuaire.artisans.metier.dto.MetierSummaryDto;
 import bf.annuaire.artisans.metier.dto.MetierWriteRequest;
@@ -24,6 +25,7 @@ import bf.annuaire.artisans.metier.entity.Category;
 import bf.annuaire.artisans.metier.entity.Hourly;
 import bf.annuaire.artisans.metier.entity.Metier;
 import bf.annuaire.artisans.metier.entity.MetierGallery;
+import bf.annuaire.artisans.metier.entity.MetierPhone;
 import bf.annuaire.artisans.metier.entity.MetierSocialMedia;
 import bf.annuaire.artisans.metier.mapper.CategoryMapper;
 import bf.annuaire.artisans.metier.mapper.MetierMapper;
@@ -32,6 +34,7 @@ import bf.annuaire.artisans.metier.repository.AddressRepository;
 import bf.annuaire.artisans.metier.repository.CategoryRepository;
 import bf.annuaire.artisans.metier.repository.HourlyRepository;
 import bf.annuaire.artisans.metier.repository.MetierGalleryRepository;
+import bf.annuaire.artisans.metier.repository.MetierPhoneRepository;
 import bf.annuaire.artisans.metier.repository.MetierRepository;
 import bf.annuaire.artisans.metier.repository.MetierSocialMediaRepository;
 import bf.annuaire.artisans.metier.repository.ServiceRepository;
@@ -65,6 +68,7 @@ public class MetierService {
     private final ServiceRepository serviceRepository;
     private final HourlyRepository hourlyRepository;
     private final MetierSocialMediaRepository socialMediaRepository;
+    private final MetierPhoneRepository phoneRepository;
     private final MetierGalleryRepository galleryRepository;
     private final MediaFileRepository mediaFileRepository;
     private final UserRepository userRepository;
@@ -138,7 +142,6 @@ public class MetierService {
      */
     private void applyWritableFields(Metier metier, MetierWriteRequest request) {
         metier.setName(request.name());
-        metier.setPhone(request.phone());
         metier.setDescription(request.description());
         metier.setAddressDescription(request.addressDescription());
         metier.setGpsLat(request.gpsLat());
@@ -279,6 +282,37 @@ public class MetierService {
         return metierMapper.toSocialDtoList(socialMediaRepository.findByMetierIdOrderByIdAsc(metierId));
     }
 
+    // ----------------------------------------------------------------- Numéros de téléphone
+
+    @Transactional(readOnly = true)
+    public List<MetierPhoneDto> listPhones(Long metierId, AuthPrincipal principal) {
+        loadVisible(metierId, principal);
+        return metierMapper.toPhoneDtoList(phoneRepository.findByMetierIdOrderByIdAsc(metierId));
+    }
+
+    /** Remplace intégralement les numéros de contact de l'enseigne. */
+    @Transactional
+    public List<MetierPhoneDto> replacePhones(AuthPrincipal principal, Long metierId, List<MetierPhoneDto> items) {
+        Metier metier = loadOwned(metierId, principal);
+        for (MetierPhoneDto item : items) {
+            if (item.number() == null || item.number().isBlank()) {
+                throw new BadRequestException("Numéro obligatoire pour chaque téléphone.");
+            }
+        }
+        phoneRepository.deleteByMetierId(metierId);
+        phoneRepository.flush();
+        for (MetierPhoneDto item : items) {
+            MetierPhone phone = new MetierPhone();
+            phone.setMetier(metier);
+            phone.setNumber(item.number());
+            phone.setWhatsapp(item.whatsapp());
+            phone.setLabel(item.label());
+            phoneRepository.save(phone);
+        }
+        events.publishEvent(new MetierContentChangedEvent(metierId));
+        return metierMapper.toPhoneDtoList(phoneRepository.findByMetierIdOrderByIdAsc(metierId));
+    }
+
     // ----------------------------------------------------------------- Galerie
 
     @Transactional(readOnly = true)
@@ -368,12 +402,13 @@ public class MetierService {
                 serviceRepository.findByMetierIdOrderByIdAsc(metier.getId());
         List<Hourly> hours = hoursOf(metier.getId());
         List<MetierSocialMedia> socials = socialMediaRepository.findByMetierIdOrderByIdAsc(metier.getId());
+        List<MetierPhone> phones = phoneRepository.findByMetierIdOrderByIdAsc(metier.getId());
         List<MetierGallery> gallery = galleryOf(metier.getId());
         return new MetierDetailDto(
                 metier.getId(),
                 metier.getOwner().getId(),
                 metier.getName(),
-                metier.getPhone(),
+                metierMapper.toPhoneDtoList(phones),
                 metier.getDescription(),
                 metier.getAddressDescription(),
                 metier.getAddress() != null ? metierMapper.toAddressDto(metier.getAddress()) : null,

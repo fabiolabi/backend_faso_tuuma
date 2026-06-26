@@ -39,7 +39,6 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_POST = {
         "/api/comments/**", // dépôt d'un commentaire
-        "/api/devices/**", // enregistrement d'un device token FCM
     };
 
     private static final String[] PUBLIC_ANY = {

@@ -49,9 +49,6 @@ public class Metier extends AbstractAuditingEntity {
     @Column(name = "name", nullable = false)
     private String name;
 
-    @Column(name = "phone", length = 30)
-    private String phone;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "address_id")
     private Address address;
