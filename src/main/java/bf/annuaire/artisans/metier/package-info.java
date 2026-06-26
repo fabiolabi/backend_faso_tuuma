@@ -5,6 +5,6 @@
  * en SQL natif, filtrée sur {@code is_published = true}).
  *
  * <p>Les notes ({@code metier_rating}) et le recalcul de {@code rating_avg} relèvent de la feature
- * {@code comment} ; ils sont ici en lecture seule. Remplace l'ancien squelette {@code business}.
+ * {@code client} (notation) ; ils sont ici en lecture seule. Remplace l'ancien squelette {@code business}.
  */
 package bf.annuaire.artisans.metier;

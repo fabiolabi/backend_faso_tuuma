@@ -51,7 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Cœur métier de l'annuaire : cycle de vie d'une enseigne ({@link Metier}) et de son agrégat
  * (adresse, catégories, services, horaires, réseaux sociaux, galerie), publication et recherche de
  * proximité. Les notes ({@code metier_rating}) et le calcul de {@code ratingAvg} relèvent de la
- * feature {@code comment} : ils sont ici en lecture seule.
+ * feature {@code client} (notation) : ils sont ici en lecture seule.
  */
 @org.springframework.stereotype.Service
 @RequiredArgsConstructor

@@ -26,7 +26,7 @@
 > (invisible en recherche) et appartient à un utilisateur `ARTISAN`. La recherche de proximité est
 > un tri Haversine (SQL natif) sur les enseignes publiées et actives. La gestion (mutation) est
 > réservée au **propriétaire** ou à un **ADMIN** ; les notes (`rating_avg`/`rating_count`) sont en
-> lecture seule (alimentées par la feature `comment`).
+> lecture seule (alimentées par la feature `client` — notation, voir plus bas).
 
 | Méthode | Chemin | Auth | Payload | Description |
 |---------|--------|------|---------|-------------|
@@ -102,11 +102,78 @@
 
 **`MediaFile`** : `{ id, url, originalName, contentType, sizeBytes, createdAt }`.
 
-## Comment (`/api/comments`)
+## Client — Demandes de prestation (`/api/client/orders`, `/api/artisan/orders`)
+
+> Un client (rôle `CLIENT`) adresse une demande de prestation à une enseigne **publiée**. La demande
+> naît `PENDING`. L'artisan **propriétaire** de l'enseigne (ou un `ADMIN`) traite la demande
+> (`accept`/`reject`/`complete`) ; le client peut l'annuler tant qu'elle est `PENDING` ou `ACCEPTED`.
+> Statuts : `PENDING → ACCEPTED | REJECTED` (artisan), `ACCEPTED → COMPLETED` (artisan),
+> `PENDING | ACCEPTED → CANCELLED` (client). Les autres transitions → `400`.
 
 | Méthode | Chemin | Auth | Payload | Description |
 |---------|--------|------|---------|-------------|
-| _à compléter_ | | | | |
+| POST | `/api/client/orders` | JWT (CLIENT) | `CreateServiceOrder` | Dépôt d'une demande (`PENDING`) → `201` + `ServiceOrder` ; enseigne non publiée → `404` ; prestation hors enseigne → `400` |
+| GET | `/api/client/orders` | JWT (CLIENT) | query : `status?`, `page`, `size` | Mes demandes → `200` + page de `ServiceOrder` |
+| GET | `/api/client/orders/{id}` | JWT (CLIENT) | — | Détail d'une de mes demandes → `200` ; pas la mienne → `404` |
+| POST | `/api/client/orders/{id}/cancel` | JWT (CLIENT) | — | Annulation → `200` ; statut non annulable → `400` |
+| GET | `/api/artisan/orders` | JWT (proprio) | query : `status?`, `page`, `size` | Demandes reçues sur mes enseignes → `200` + page de `ServiceOrder` |
+| POST | `/api/artisan/orders/{id}/accept` | JWT (proprio/ADMIN) | — | `PENDING → ACCEPTED` → `200` ; sinon `400` ; non-proprio → `403` |
+| POST | `/api/artisan/orders/{id}/reject` | JWT (proprio/ADMIN) | — | `PENDING → REJECTED` → `200` ; sinon `400` ; non-proprio → `403` |
+| POST | `/api/artisan/orders/{id}/complete` | JWT (proprio/ADMIN) | — | `ACCEPTED → COMPLETED` → `200` ; sinon `400` ; non-proprio → `403` |
+
+**`CreateServiceOrder`** : `{ metierId, serviceId?, message?, requestedDate? }`.
+**`ServiceOrder`** : `{ id, metierId, metierName, serviceId, serviceName, clientUserId, clientName, message, requestedDate, status, createdAt, updatedAt }`.
+
+## Client — Notation des enseignes (`/api/metiers/{id}/ratings`, `/api/client/ratings`)
+
+> Notation `metier_rating` portée par la feature `client` (remplace l'ancien modèle `comment`/Gemini).
+> Un client note une enseigne **publiée** de 1 à 5 (+ commentaire), **une seule fois** par enseigne
+> (upsert). Chaque écriture/suppression recalcule `metier.rating_avg`/`rating_count`. Les avis sont
+> publics en lecture (sous le préfixe public `/api/metiers/**`). Noter sa propre enseigne → `400`.
+
+| Méthode | Chemin | Auth | Payload | Description |
+|---------|--------|------|---------|-------------|
+| GET | `/api/metiers/{id}/ratings` | Public | query : `page`, `size` | Avis publics d'une enseigne → `200` + page de `MetierRating` |
+| POST | `/api/metiers/{id}/ratings` | JWT (CLIENT) | `Rating` | Dépose/met à jour ma note (upsert) → `200` + `MetierRating` ; auto-notation → `400` |
+| DELETE | `/api/metiers/{id}/ratings/mine` | JWT (CLIENT) | — | Supprime ma note → `204` ; aucune note → `404` |
+| GET | `/api/client/ratings` | JWT (CLIENT) | query : `page`, `size` | Mes notes → `200` + page de `MetierRating` |
+
+**`Rating`** : `{ rating (1-5), comment? }`.
+**`MetierRating`** : `{ id, metierId, metierName, clientUserId, clientName, rating, comment, createdAt }`.
+
+## Client — Messagerie (`/api/conversations`)
+
+> Messagerie client↔artisan persistée (REST ; le temps-réel WebSocket reste à venir). Au plus un fil
+> par couple (client, enseigne). Seul un `CLIENT` démarre un fil ; les opérations sont réservées aux
+> **participants** (le client, le propriétaire de l'enseigne, ou un `ADMIN`). Un fil/message non
+> accessible répond `404` (pas de fuite d'existence).
+
+| Méthode | Chemin | Auth | Payload | Description |
+|---------|--------|------|---------|-------------|
+| POST | `/api/conversations` | JWT (CLIENT) | `StartConversation` | Démarre ou récupère le fil avec une enseigne (+ 1er message optionnel) → `200` + `Conversation` |
+| GET | `/api/conversations` | JWT (participant) | query : `box?` (`client`\|`artisan`, défaut `client`), `page`, `size` | Mes fils, triés par dernier message → `200` + page de `Conversation` |
+| GET | `/api/conversations/{id}` | JWT (participant) | — | Détail d'un fil → `200` ; non participant → `404` |
+| GET | `/api/conversations/{id}/messages` | JWT (participant) | query : `page`, `size` | Messages (récent → ancien) → `200` + page de `Message` |
+| POST | `/api/conversations/{id}/messages` | JWT (participant) | `SendMessage` | Envoie un message (maj `lastMessageAt`) → `201` + `Message` |
+| POST | `/api/conversations/{id}/read` | JWT (participant) | — | Marque comme lus les messages reçus → `204` |
+
+**`StartConversation`** : `{ metierId, firstMessage? }`. **`SendMessage`** : `{ body }`.
+**`Conversation`** : `{ id, metierId, metierName, clientUserId, clientName, lastMessageAt, lastMessagePreview, unreadCount, createdAt }`.
+**`Message`** : `{ id, conversationId, senderUserId, body, sentAt, readAt }`.
+
+## Client — Espace (`/api/client/summary`)
+
+| Méthode | Chemin | Auth | Payload | Description |
+|---------|--------|------|---------|-------------|
+| GET | `/api/client/summary` | JWT (CLIENT) | — | Résumé d'activité → `200` + `ClientSummary` |
+
+**`ClientSummary`** : `{ ordersPending, ordersAccepted, ordersCompleted, ordersRejected, ordersCancelled, ratingsCount, conversationsCount }`.
+
+## Comment (`/api/comments`)
+
+> **Remplacé par la feature `client` (notation).** La notation `metier_rating` est désormais portée par
+> `POST /api/metiers/{id}/ratings` (voir « Client — Notation »). La piste « notation automatique Gemini »
+> n'a pas de table dédiée dans le schéma et reste à arbitrer ; aucun endpoint `/api/comments`.
 
 ## Device (`/api/devices`)
 
