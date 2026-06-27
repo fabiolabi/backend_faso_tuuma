@@ -59,17 +59,18 @@ public class AuthController {
         authService.logout(request.refreshToken());
     }
 
-    @Operation(summary = "Demande d'un code OTP de réinitialisation (envoyé par SMS)")
+    @Operation(summary = "Demande d'un code OTP de réinitialisation (SMS ou email)")
     @PostMapping("/password/reset/request")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public void requestPasswordReset(@Valid @RequestBody PasswordResetRequest request) {
-        passwordResetService.requestReset(request.phone());
+        passwordResetService.requestReset(request.phone(), request.email());
     }
 
-    @Operation(summary = "Confirmation de la réinitialisation avec le code OTP reçu par SMS")
+    @Operation(summary = "Confirmation de la réinitialisation avec le code OTP reçu par SMS ou email")
     @PostMapping("/password/reset/confirm")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void confirmPasswordReset(@Valid @RequestBody PasswordResetConfirm request) {
-        passwordResetService.confirmReset(request.phone(), request.code(), request.newPassword());
+        passwordResetService.confirmReset(
+                request.phone(), request.email(), request.code(), request.newPassword());
     }
 }

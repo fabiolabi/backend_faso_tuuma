@@ -15,8 +15,8 @@
 | POST | `/api/auth/login` | Public | `{ phone, password }` | Connexion → `200` + `AuthResponse` ; identifiants invalides → `401` |
 | POST | `/api/auth/refresh` | Public | `{ refreshToken }` | Nouvelle paire de tokens (rotation) ; token invalide/expiré/révoqué → `401` |
 | POST | `/api/auth/logout` | Public | `{ refreshToken }` | Révoque le refresh token → `204` |
-| POST | `/api/auth/password/reset/request` | Public | `{ email }` | Envoie un code à 6 chiffres par email → `202` (réponse identique si l'email est inconnu) |
-| POST | `/api/auth/password/reset/confirm` | Public | `{ email, code, newPassword }` | Vérifie le code et change le mot de passe → `204` ; code invalide/expiré → `400` |
+| POST | `/api/auth/password/reset/request` | Public | `{ phone? }` ou `{ email? }` (exactement l'un des deux) | Envoie un code à 6 chiffres par SMS ou email → `202` (réponse identique si l'identifiant est inconnu) |
+| POST | `/api/auth/password/reset/confirm` | Public | `{ phone? \| email?, code, newPassword }` | Vérifie le code et change le mot de passe → `204` ; code invalide/expiré → `400` |
 
 **`AuthResponse`** : `{ accessToken, refreshToken, tokenType: "Bearer", expiresIn, user: { id, firstname, lastname, phone, email, roles } }`.
 
