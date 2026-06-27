@@ -72,4 +72,21 @@ public class UserService {
                 .findByPhone(phone)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable."));
     }
+
+    /** Ajoute un rôle à un utilisateur existant (idempotent si déjà présent). */
+    @Transactional
+    public User grantRole(Long userId, RoleName roleName) {
+        User user = userRepository
+                .findWithDetailsById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable."));
+        boolean alreadyHas = user.getRoles().stream().anyMatch(r -> r.getName() == roleName);
+        if (alreadyHas) {
+            return user;
+        }
+        Role role = roleRepository
+                .findByName(roleName)
+                .orElseThrow(() -> new ResourceNotFoundException("Rôle introuvable : " + roleName));
+        user.addRole(role);
+        return userRepository.save(user);
+    }
 }

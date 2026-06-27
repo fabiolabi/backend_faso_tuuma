@@ -1,0 +1,56 @@
+# ============================================================
+#  Faso Tuuma — stack complète : API + PostgreSQL
+#  Démarrage : cp .env.example .env  (puis renseigner)  &&  docker compose up
+#  Les variables du .env sont injectées dans l'environnement du conteneur app
+#  où Spring Boot résout les ${VAR} des application*.properties au démarrage.
+# ============================================================
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    # Toutes les variables du .env (JWT, mail, IA, Firebase, media...).
+    # required: false => le démarrage n'échoue pas si .env est absent
+    # (les variables peuvent aussi venir de l'environnement du shell).
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # URL datasource construite à partir du service db (hostname = nom du service).
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      # Stockage media dans le volume monté ci-dessous.
+      MEDIA_STORAGE_DIR: /app/data/media
+    volumes:
+      # Persistance des fichiers media (sinon perdus à chaque recreate).
+      - ./data/media:/app/data/media
+      # Credentials Firebase (push FCM) : décommentez cette ligne UNIQUEMENT
+      # quand le fichier firebase-service-account.json existe à la racine, puis
+      # mettez NOTIFICATION_ENABLED=true dans .env. (Un bind mount vers un
+      # fichier absent créerait un répertoire et casserait le démarrage.)
+      # - ./firebase-service-account.json:/app/firebase-service-account.json:ro
+    restart: unless-stopped
+
+volumes:
+  pgdata:

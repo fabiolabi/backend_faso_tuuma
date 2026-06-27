@@ -1,0 +1,32 @@
+# Réduit le contexte de build et évite de copier des artefacts/secrets.
+target/
+data/
+*.mv.db
+*.trace.db
+
+# Git / IDE
+.git
+.gitignore
+.idea
+.vscode
+*.iml
+*.iws
+*.ipr
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Secrets — ne jamais embarquer dans l'image
+.env
+.env.*
+!.env.example
+application-local.properties
+**/application-local.properties
+firebase-service-account*.json
+*serviceAccount*.json
+
+# Divers
+HELP.md
+*.md
+!pom.xml

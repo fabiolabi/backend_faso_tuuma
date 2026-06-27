@@ -77,6 +77,16 @@ public class AuthService {
         refreshTokenService.revoke(rawRefreshToken);
     }
 
+    /**
+     * Active le rôle ARTISAN pour un client existant et émet de nouveaux tokens (rôles à jour dans le
+     * JWT).
+     */
+    @Transactional
+    public AuthResponse becomeArtisan(Long userId) {
+        User user = userService.grantRole(userId, RoleName.ARTISAN);
+        return buildAuthResponse(user);
+    }
+
     private AuthResponse buildAuthResponse(User user) {
         String accessToken = jwtService.generateAccessToken(user);
         String refreshToken = refreshTokenService.issue(user);
