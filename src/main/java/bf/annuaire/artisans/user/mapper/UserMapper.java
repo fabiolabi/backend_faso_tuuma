@@ -19,6 +19,7 @@ public interface UserMapper {
     @Mapping(target = "firstname", source = "person.firstname")
     @Mapping(target = "lastname", source = "person.lastname")
     @Mapping(target = "email", source = "person.email")
+    @Mapping(target = "city", source = "person.city")
     @Mapping(target = "roles", source = "roles", qualifiedByName = "rolesToNames")
     UserDto toDto(User user);
 

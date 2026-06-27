@@ -2,10 +2,13 @@ package bf.annuaire.artisans.notification.service;
 
 import bf.annuaire.artisans.auth.security.AuthPrincipal;
 import bf.annuaire.artisans.client.PersonNames;
+import bf.annuaire.artisans.client.rating.repository.MetierRatingRepository;
 import bf.annuaire.artisans.client.rating.repository.ServiceRatingRepository;
 import bf.annuaire.artisans.common.exception.ResourceNotFoundException;
 import bf.annuaire.artisans.device.service.DeviceTokenService;
+import bf.annuaire.artisans.metier.entity.Metier;
 import bf.annuaire.artisans.metier.entity.Service;
+import bf.annuaire.artisans.metier.repository.MetierRepository;
 import bf.annuaire.artisans.metier.repository.ServiceRepository;
 import bf.annuaire.artisans.notification.dto.NotificationDto;
 import bf.annuaire.artisans.notification.entity.Notification;
@@ -42,7 +45,9 @@ public class NotificationService {
     private final PushSender pushSender;
     private final NotificationMapper notificationMapper;
     private final ServiceRepository serviceRepository;
+    private final MetierRepository metierRepository;
     private final ServiceRatingRepository serviceRatingRepository;
+    private final MetierRatingRepository metierRatingRepository;
     private final ObjectMapper objectMapper;
 
     // ----------------------------------------------------------------- Émission
@@ -51,6 +56,26 @@ public class NotificationService {
     @Transactional
     public void notify(Long recipientUserId, NotificationType type, String title, String body, Map<String, String> data) {
         persistAndPush(recipientUserId, type, title, body, data);
+    }
+
+    /** Notifie le propriétaire qu'un nouvel avis a été déposé sur son commerce. */
+    @Transactional
+    public void notifyNewMetierReview(Long ratingId, Long metierId) {
+        Metier metier = metierRepository.findById(metierId).orElse(null);
+        if (metier == null || metier.getOwner() == null) {
+            return;
+        }
+        Long ownerId = metier.getOwner().getId();
+        String author = metierRatingRepository
+                .findById(ratingId)
+                .map(rating -> PersonNames.fullName(rating.getClient()))
+                .orElse(null);
+        String who = author != null ? author : "Un client";
+        String body = who + " a laissé un avis sur « " + metier.getName() + " ».";
+        Map<String, String> data = Map.of(
+                "type", NotificationType.NEW_REVIEW.name(),
+                "metierId", String.valueOf(metierId));
+        persistAndPush(ownerId, NotificationType.NEW_REVIEW, "Nouvel avis", body, data);
     }
 
     /** Notifie le propriétaire de l'enseigne qu'un nouvel avis a été déposé sur l'une de ses prestations. */

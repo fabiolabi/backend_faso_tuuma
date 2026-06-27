@@ -6,8 +6,7 @@ import java.util.List;
 
 /**
  * Vue détaillée d'une enseigne et de son agrégat (catégories, services, horaires, réseaux sociaux,
- * galerie). La notation est portée par chaque service ({@link ServiceDto}) : l'enseigne n'a plus de
- * note globale propre.
+ * galerie). La note globale ({@code ratingAvg}/{@code ratingCount}) porte sur l'enseigne.
  */
 public record MetierDetailDto(
         Long id,
@@ -22,6 +21,9 @@ public record MetierDetailDto(
         BigDecimal gpsLng,
         boolean published,
         boolean active,
+        BigDecimal ratingAvg,
+        Integer ratingCount,
+        String aiSummary,
         List<CategoryDto> categories,
         List<ServiceDto> services,
         List<HourlyDto> hours,

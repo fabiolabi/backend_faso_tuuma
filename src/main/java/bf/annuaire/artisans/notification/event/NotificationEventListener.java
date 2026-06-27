@@ -1,5 +1,6 @@
 package bf.annuaire.artisans.notification.event;
 
+import bf.annuaire.artisans.ai.event.MetierReviewSubmittedEvent;
 import bf.annuaire.artisans.ai.event.ReviewSubmittedEvent;
 import bf.annuaire.artisans.notification.entity.NotificationType;
 import bf.annuaire.artisans.notification.service.NotificationService;
@@ -24,7 +25,18 @@ public class NotificationEventListener {
 
     private final NotificationService notificationService;
 
-    /** Nouvel avis → notifie le propriétaire de l'enseigne. */
+    /** Nouvel avis commerce → notifie le propriétaire. */
+    @Async("notificationExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onMetierReviewSubmitted(MetierReviewSubmittedEvent event) {
+        try {
+            notificationService.notifyNewMetierReview(event.ratingId(), event.metierId());
+        } catch (Exception e) {
+            log.warn("Notification d'avis commerce {} échouée : {}", event.ratingId(), e.getMessage());
+        }
+    }
+
+    /** Nouvel avis prestation → notifie le propriétaire de l'enseigne. */
     @Async("notificationExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewSubmitted(ReviewSubmittedEvent event) {

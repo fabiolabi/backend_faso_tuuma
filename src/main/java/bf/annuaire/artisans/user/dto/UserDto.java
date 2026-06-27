@@ -12,4 +12,5 @@ public record UserDto(
         String lastname,
         String phone,
         String email,
+        String city,
         Set<String> roles) {}

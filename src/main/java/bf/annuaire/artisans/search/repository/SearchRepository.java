@@ -45,7 +45,9 @@ public interface SearchRepository extends JpaRepository<Metier, Long> {
                       AND (:categorySlug IS NULL OR EXISTS (
                             SELECT 1 FROM metier_category mc
                             JOIN category c ON c.id = mc.category_id
-                            WHERE mc.metier_id = m.id AND c.slug = :categorySlug))
+                            LEFT JOIN category p ON p.id = c.parent_id
+                            WHERE mc.metier_id = m.id
+                              AND (c.slug = :categorySlug OR p.slug = :categorySlug)))
                       AND (:lat IS NULL OR :lng IS NULL OR :radiusKm IS NULL OR (
                             m.gps_lat IS NOT NULL AND m.gps_lng IS NOT NULL
                             AND 6371 * acos(LEAST(1, cos(radians(:lat)) * cos(radians(m.gps_lat))
@@ -77,7 +79,9 @@ public interface SearchRepository extends JpaRepository<Metier, Long> {
                       AND (:categorySlug IS NULL OR EXISTS (
                             SELECT 1 FROM metier_category mc
                             JOIN category c ON c.id = mc.category_id
-                            WHERE mc.metier_id = m.id AND c.slug = :categorySlug))
+                            LEFT JOIN category p ON p.id = c.parent_id
+                            WHERE mc.metier_id = m.id
+                              AND (c.slug = :categorySlug OR p.slug = :categorySlug)))
                       AND (:lat IS NULL OR :lng IS NULL OR :radiusKm IS NULL OR (
                             m.gps_lat IS NOT NULL AND m.gps_lng IS NOT NULL
                             AND 6371 * acos(LEAST(1, cos(radians(:lat)) * cos(radians(m.gps_lat))

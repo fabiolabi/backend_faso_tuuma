@@ -11,35 +11,32 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.PathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
 /**
- * I/O bas niveau du stockage des fichiers sur le système de fichiers local.
+ * Stockage des fichiers sur le système de fichiers local (développement / repli).
  *
- * <p>Le chemin relatif ({@code storedPath}) est entièrement généré côté serveur
- * ({@code yyyy/MM/uuid.ext}) : il n'est jamais dérivé du nom fourni par le client, ce qui élimine
- * tout risque de <em>path traversal</em>. Toutes les résolutions sont vérifiées pour rester sous le
- * répertoire racine.
+ * <p>Le chemin relatif est entièrement généré côté serveur ({@code yyyy/MM/uuid.ext}) : il n'est
+ * jamais dérivé du nom fourni par le client, ce qui élimine tout risque de path traversal.
  */
 @Component
-public class MediaStorage {
+@ConditionalOnProperty(prefix = "app.media", name = "backend", havingValue = "local", matchIfMissing = true)
+public class LocalMediaStorage implements MediaStorageBackend {
 
     private static final DateTimeFormatter SHARD =
             DateTimeFormatter.ofPattern("yyyy/MM").withZone(ZoneOffset.UTC);
 
     private final Path root;
 
-    public MediaStorage(MediaProperties properties) {
+    public LocalMediaStorage(MediaProperties properties) {
         this.root = Paths.get(properties.getStorageDir()).toAbsolutePath().normalize();
     }
 
-    /**
-     * Écrit le contenu sous {@code yyyy/MM/uuid.ext} et renvoie le chemin relatif (séparateurs
-     * {@code /}) à persister.
-     */
-    public String store(InputStream content, String extension) {
+    @Override
+    public String store(InputStream content, String extension, String contentType, long sizeBytes) {
         String relativePath = SHARD.format(Instant.now()) + "/" + UUID.randomUUID() + extension;
         Path target = resolve(relativePath);
         try {
@@ -51,7 +48,7 @@ public class MediaStorage {
         return relativePath;
     }
 
-    /** Charge le fichier en ressource lisible pour le téléchargement. */
+    @Override
     public Resource loadAsResource(String relativePath) {
         Path target = resolve(relativePath);
         if (!Files.isReadable(target)) {
@@ -60,7 +57,7 @@ public class MediaStorage {
         return new PathResource(target);
     }
 
-    /** Supprime le fichier (best-effort : l'absence n'est pas une erreur). */
+    @Override
     public void delete(String relativePath) {
         try {
             Files.deleteIfExists(resolve(relativePath));
@@ -69,19 +66,11 @@ public class MediaStorage {
         }
     }
 
-    /** Résout un chemin relatif sous {@link #root} en garantissant qu'il n'en sort pas. */
     private Path resolve(String relativePath) {
         Path target = root.resolve(relativePath).normalize();
         if (!target.startsWith(root)) {
             throw new MediaStorageException("Chemin de fichier invalide : " + relativePath, null);
         }
         return target;
-    }
-
-    /** Erreur d'I/O du stockage, mappée en 500 par le gestionnaire global. */
-    public static class MediaStorageException extends RuntimeException {
-        public MediaStorageException(String message, Throwable cause) {
-            super(message, cause);
-        }
     }
 }

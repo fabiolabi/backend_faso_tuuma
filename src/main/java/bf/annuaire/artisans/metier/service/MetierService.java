@@ -7,6 +7,7 @@ import bf.annuaire.artisans.common.exception.ResourceNotFoundException;
 import bf.annuaire.artisans.common.util.GeoUtils;
 import bf.annuaire.artisans.media.entity.MediaFile;
 import bf.annuaire.artisans.media.repository.MediaFileRepository;
+import bf.annuaire.artisans.media.service.MediaUrlService;
 import bf.annuaire.artisans.metier.dto.AddGalleryItemRequest;
 import bf.annuaire.artisans.metier.dto.CreateMetierRequest;
 import bf.annuaire.artisans.metier.dto.GalleryItemDto;
@@ -73,6 +74,7 @@ public class MetierService {
     private final MediaFileRepository mediaFileRepository;
     private final UserRepository userRepository;
     private final MetierMapper metierMapper;
+    private final MediaUrlService mediaUrlService;
     private final ServiceMapper serviceMapper;
     private final CategoryMapper categoryMapper;
     private final ApplicationEventPublisher events;
@@ -412,11 +414,14 @@ public class MetierService {
                 metier.getDescription(),
                 metier.getAddressDescription(),
                 metier.getAddress() != null ? metierMapper.toAddressDto(metier.getAddress()) : null,
-                metierMapper.coverUrl(metier),
+                mediaUrlService.mediaUrl(metier.getCover()),
                 metier.getGpsLat(),
                 metier.getGpsLng(),
                 metier.isPublished(),
                 metier.isActive(),
+                metier.getRatingAvg(),
+                metier.getRatingCount(),
+                metier.getAiSummary(),
                 categoryMapper.toDtoList(metier.getCategories()),
                 serviceMapper.toDtoList(services),
                 metierMapper.toHourlyDtoList(hours),

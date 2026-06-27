@@ -21,26 +21,30 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Orchestration du stockage de fichiers : validation (type/taille), écriture disque via
- * {@link MediaStorage}, persistance de la ligne {@code media_file}, lecture et suppression.
+ * {@link MediaStorageBackend}, persistance de la ligne {@code media_file}, lecture et suppression.
  */
 @Service
 public class MediaService {
 
     /** Extension de fichier dérivée du type MIME (seuls ces types sont autorisés). */
-    private static final Map<String, String> EXTENSION_BY_TYPE = Map.of(
-            "image/jpeg", ".jpg",
-            "image/png", ".png",
-            "image/webp", ".webp");
+    private static final Map<String, String> EXTENSION_BY_TYPE = Map.ofEntries(
+            Map.entry("image/jpeg", ".jpg"),
+            Map.entry("image/jpg", ".jpg"),
+            Map.entry("image/png", ".png"),
+            Map.entry("image/webp", ".webp"),
+            Map.entry("image/gif", ".gif"),
+            Map.entry("image/heic", ".heic"),
+            Map.entry("image/heif", ".heif"));
 
     private final MediaFileRepository mediaFileRepository;
     private final UserRepository userRepository;
-    private final MediaStorage storage;
+    private final MediaStorageBackend storage;
     private final MediaProperties properties;
 
     public MediaService(
             MediaFileRepository mediaFileRepository,
             UserRepository userRepository,
-            MediaStorage storage,
+            MediaStorageBackend storage,
             MediaProperties properties) {
         this.mediaFileRepository = mediaFileRepository;
         this.userRepository = userRepository;
@@ -58,9 +62,10 @@ public class MediaService {
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("Aucun fichier fourni.");
         }
-        String contentType = file.getContentType();
+        String contentType = resolveContentType(file);
         if (!properties.getAllowedContentTypes().contains(contentType)) {
-            throw new BadRequestException("Type de fichier non autorisé. Images JPEG, PNG ou WebP uniquement.");
+            throw new BadRequestException(
+                    "Type de fichier non autorisé. Formats acceptés : JPEG, PNG, WebP, GIF, HEIC.");
         }
         if (file.getSize() > properties.getMaxFileSizeBytes()) {
             throw new BadRequestException(
@@ -69,7 +74,11 @@ public class MediaService {
 
         String storedPath;
         try {
-            storedPath = storage.store(file.getInputStream(), EXTENSION_BY_TYPE.get(contentType));
+            storedPath = storage.store(
+                    file.getInputStream(),
+                    EXTENSION_BY_TYPE.get(contentType),
+                    contentType,
+                    file.getSize());
         } catch (IOException e) {
             throw new BadRequestException("Lecture du fichier impossible.");
         }
@@ -126,6 +135,33 @@ public class MediaService {
         }
         User uploader = mediaFile.getUploadedBy();
         return uploader != null && uploader.getId().equals(principal.userId());
+    }
+
+    private String resolveContentType(MultipartFile file) {
+        String contentType = file.getContentType();
+        if (contentType != null && properties.getAllowedContentTypes().contains(contentType)) {
+            return contentType;
+        }
+        if ("image/jpg".equals(contentType)) {
+            return "image/jpeg";
+        }
+
+        String ext = StringUtils.getFilenameExtension(file.getOriginalFilename());
+        if (ext != null) {
+            String normalized = switch (ext.toLowerCase()) {
+                case "jpg", "jpeg" -> "image/jpeg";
+                case "png" -> "image/png";
+                case "webp" -> "image/webp";
+                case "gif" -> "image/gif";
+                case "heic" -> "image/heic";
+                case "heif" -> "image/heif";
+                default -> contentType;
+            };
+            if (normalized != null && properties.getAllowedContentTypes().contains(normalized)) {
+                return normalized;
+            }
+        }
+        return contentType;
     }
 
     private String sanitizeName(String originalName) {

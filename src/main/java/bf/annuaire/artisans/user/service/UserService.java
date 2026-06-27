@@ -2,6 +2,9 @@ package bf.annuaire.artisans.user.service;
 
 import bf.annuaire.artisans.common.exception.BadRequestException;
 import bf.annuaire.artisans.common.exception.ResourceNotFoundException;
+import bf.annuaire.artisans.user.dto.UpdateProfileRequest;
+import bf.annuaire.artisans.user.dto.UserDto;
+import bf.annuaire.artisans.user.mapper.UserMapper;
 import bf.annuaire.artisans.user.entity.Person;
 import bf.annuaire.artisans.user.entity.Role;
 import bf.annuaire.artisans.user.entity.RoleName;
@@ -28,6 +31,7 @@ public class UserService {
     private final PersonRepository personRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserMapper userMapper;
 
     /**
      * Crée un utilisateur complet (état civil, secrets, rôle) dans une transaction. Vérifie l'unicité
@@ -88,5 +92,32 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("Rôle introuvable : " + roleName));
         user.addRole(role);
         return userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public UserDto getProfile(Long userId) {
+        User user = userRepository
+                .findWithDetailsById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable."));
+        return userMapper.toDto(user);
+    }
+
+    @Transactional
+    public UserDto updateProfile(Long userId, UpdateProfileRequest request) {
+        User user = userRepository
+                .findWithDetailsById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable."));
+        Person person = user.getPerson();
+        String email = StringUtils.hasText(request.email()) ? request.email().trim() : null;
+        if (email != null
+                && personRepository.existsByEmailAndIdNot(email, person.getId())) {
+            throw new BadRequestException("Cette adresse email est déjà utilisée.");
+        }
+        person.setFirstname(request.firstname().trim());
+        person.setLastname(request.lastname().trim());
+        person.setEmail(email);
+        person.setCity(StringUtils.hasText(request.city()) ? request.city().trim() : null);
+        userRepository.save(user);
+        return userMapper.toDto(user);
     }
 }

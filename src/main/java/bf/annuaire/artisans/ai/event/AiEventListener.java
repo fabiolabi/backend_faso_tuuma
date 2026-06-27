@@ -1,6 +1,7 @@
 package bf.annuaire.artisans.ai.event;
 
 import bf.annuaire.artisans.ai.service.EmbeddingService;
+import bf.annuaire.artisans.ai.service.MetierRatingRecalculator;
 import bf.annuaire.artisans.ai.service.ReviewAnalysisService;
 import bf.annuaire.artisans.ai.service.ServiceRatingRecalculator;
 import lombok.RequiredArgsConstructor;
@@ -23,9 +24,33 @@ public class AiEventListener {
 
     private final ReviewAnalysisService analysisService;
     private final ServiceRatingRecalculator recalculator;
+    private final MetierRatingRecalculator metierRecalculator;
     private final EmbeddingService embeddingService;
 
-    /** Nouvel avis : analyse IA de l'avis, puis recalcul de la note + synthèse du service. */
+    /** Nouvel avis commerce : analyse IA puis recalcul de la note de l'enseigne. */
+    @Async("aiExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onMetierReviewSubmitted(MetierReviewSubmittedEvent event) {
+        try {
+            analysisService.analyzeMetier(event.ratingId());
+            metierRecalculator.recalc(event.metierId());
+        } catch (Exception e) {
+            log.warn("Traitement IA de l'avis commerce {} échoué : {}", event.ratingId(), e.getMessage());
+        }
+    }
+
+    /** Avis commerce supprimé / modifié : recalcul de la note de l'enseigne. */
+    @Async("aiExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onMetierAggregateChanged(MetierAggregateChangedEvent event) {
+        try {
+            metierRecalculator.recalc(event.metierId());
+        } catch (Exception e) {
+            log.warn("Recalcul de la note du commerce {} échoué : {}", event.metierId(), e.getMessage());
+        }
+    }
+
+    /** Nouvel avis prestation : analyse IA de l'avis, puis recalcul de la note + synthèse du service. */
     @Async("aiExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewSubmitted(ReviewSubmittedEvent event) {

@@ -3,7 +3,9 @@ package bf.annuaire.artisans.ai.service;
 import bf.annuaire.artisans.ai.client.GeminiClient;
 import bf.annuaire.artisans.ai.client.ReviewAssessment;
 import bf.annuaire.artisans.client.rating.entity.RatingStatus;
+import bf.annuaire.artisans.client.rating.entity.MetierRating;
 import bf.annuaire.artisans.client.rating.entity.ServiceRating;
+import bf.annuaire.artisans.client.rating.repository.MetierRatingRepository;
 import bf.annuaire.artisans.client.rating.repository.ServiceRatingRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -29,6 +31,7 @@ public class ReviewAnalysisService {
 
     private final GeminiClient ai;
     private final ServiceRatingRepository ratingRepository;
+    private final MetierRatingRepository metierRatingRepository;
 
     @Transactional
     public void analyze(Long ratingId) {
@@ -45,6 +48,21 @@ public class ReviewAnalysisService {
         ratingRepository.save(rating);
     }
 
+    @Transactional
+    public void analyzeMetier(Long ratingId) {
+        MetierRating rating = metierRatingRepository.findById(ratingId).orElse(null);
+        if (rating == null) {
+            return;
+        }
+        if (rating.getComment() == null || rating.getComment().isBlank()) {
+            applyNoTextMetier(rating);
+        } else {
+            applyMetier(rating, ai.analyze(rating.getComment(), rating.getStarRating()));
+        }
+        rating.setAiProcessedAt(Instant.now());
+        metierRatingRepository.save(rating);
+    }
+
     /** Avis sans texte : la note IA = l'étoile saisie, approuvé d'office, plein poids. */
     private void applyNoText(ServiceRating rating) {
         rating.setAiRating(rating.getStarRating());
@@ -56,6 +74,35 @@ public class ReviewAnalysisService {
         rating.setModerationReason(null);
         rating.setWeight(BigDecimal.ONE.setScale(2));
         rating.setStatus(RatingStatus.APPROVED);
+    }
+
+    private void applyNoTextMetier(MetierRating rating) {
+        rating.setAiRating(rating.getStarRating());
+        rating.setSentimentLabel(null);
+        rating.setSentimentScore(null);
+        rating.setMismatch(false);
+        rating.setFake(false);
+        rating.setInappropriate(false);
+        rating.setModerationReason(null);
+        rating.setWeight(BigDecimal.ONE.setScale(2));
+        rating.setStatus(RatingStatus.APPROVED);
+    }
+
+    private void applyMetier(MetierRating rating, ReviewAssessment a) {
+        boolean mismatch = Math.abs(a.textRating() - rating.getStarRating()) >= MISMATCH_THRESHOLD;
+        boolean rejected = a.fake() || a.inappropriate();
+
+        rating.setAiRating((short) clamp(a.textRating()));
+        rating.setSentimentLabel(a.sentimentLabel());
+        rating.setSentimentScore(clampScore(a.sentimentScore()));
+        rating.setMismatch(mismatch);
+        rating.setFake(a.fake());
+        rating.setInappropriate(a.inappropriate());
+        rating.setModerationReason(a.reason());
+        rating.setStatus(rejected ? RatingStatus.REJECTED : RatingStatus.APPROVED);
+        rating.setWeight(rejected
+                ? BigDecimal.ZERO.setScale(2)
+                : (mismatch ? MISMATCH_WEIGHT : BigDecimal.ONE.setScale(2)));
     }
 
     private void apply(ServiceRating rating, ReviewAssessment a) {

@@ -1,8 +1,6 @@
 # ============================================================
 #  Faso Tuuma — stack complète : API + PostgreSQL
-#  Démarrage : cp .env.example .env  (puis renseigner)  &&  docker compose up
-#  Les variables du .env sont injectées dans l'environnement du conteneur app
-#  où Spring Boot résout les ${VAR} des application*.properties au démarrage.
+#  Démarrage : cp env.production.example .env  (prod)  &&  docker compose up -d --build
 # ============================================================
 
 services:
@@ -28,28 +26,28 @@ services:
         condition: service_healthy
     ports:
       - "8080:8080"
-    # Toutes les variables du .env (JWT, mail, IA, Firebase, media...).
-    # required: false => le démarrage n'échoue pas si .env est absent
-    # (les variables peuvent aussi venir de l'environnement du shell).
     env_file:
       - path: .env
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      # URL datasource construite à partir du service db (hostname = nom du service).
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      # Stockage media dans le volume monté ci-dessous.
-      MEDIA_STORAGE_DIR: /app/data/media
+      # ---- Media / R2 ----
+      MEDIA_BACKEND: ${MEDIA_BACKEND:-local}
+      MEDIA_STORAGE_DIR: ${MEDIA_STORAGE_DIR:-/app/data/media}
+      MEDIA_MAX_SIZE: ${MEDIA_MAX_SIZE:-5242880}
+      MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:-}
+      MEDIA_MIGRATE_LOCAL_TO_R2: ${MEDIA_MIGRATE_LOCAL_TO_R2:-false}
+      R2_BUCKET: ${R2_BUCKET}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_REGION: ${R2_REGION:-auto}
     volumes:
-      # Persistance des fichiers media (sinon perdus à chaque recreate).
+      # Conservé pour migration one-shot local→R2 et repli ; inutile une fois R2 seul.
       - ./data/media:/app/data/media
-      # Credentials Firebase (push FCM) : décommentez cette ligne UNIQUEMENT
-      # quand le fichier firebase-service-account.json existe à la racine, puis
-      # mettez NOTIFICATION_ENABLED=true dans .env. (Un bind mount vers un
-      # fichier absent créerait un répertoire et casserait le démarrage.)
-      # - ./firebase-service-account.json:/app/firebase-service-account.json:ro
     restart: unless-stopped
 
 volumes:

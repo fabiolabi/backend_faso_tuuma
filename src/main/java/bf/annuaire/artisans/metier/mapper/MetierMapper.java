@@ -1,5 +1,6 @@
 package bf.annuaire.artisans.metier.mapper;
 
+import bf.annuaire.artisans.media.service.MediaUrlService;
 import bf.annuaire.artisans.metier.dto.AddressDto;
 import bf.annuaire.artisans.metier.dto.GalleryItemDto;
 import bf.annuaire.artisans.metier.dto.HourlyDto;
@@ -27,10 +28,10 @@ import org.mapstruct.Named;
  * couverture, la ville/quartier et les slugs de catégories ; le {@code MetierService} compose la vue
  * détaillée à partir de ces sous-conversions et des collections chargées séparément.
  */
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", uses = MediaUrlService.class)
 public interface MetierMapper {
 
-    @Mapping(target = "coverUrl", expression = "java(coverUrl(metier))")
+    @Mapping(target = "coverUrl", source = "metier.cover", qualifiedByName = "mediaUrl")
     @Mapping(target = "city", source = "metier.address.city")
     @Mapping(target = "district", source = "metier.address.district")
     @Mapping(target = "categories", source = "metier.categories", qualifiedByName = "categorySlugs")
@@ -52,15 +53,10 @@ public interface MetierMapper {
     List<MetierPhoneDto> toPhoneDtoList(List<MetierPhone> phones);
 
     @Mapping(target = "fileId", source = "file.id")
-    @Mapping(target = "url", expression = "java(\"/api/media/\" + gallery.getFile().getId())")
+    @Mapping(target = "url", source = "file", qualifiedByName = "mediaUrl")
     GalleryItemDto toGalleryDto(MetierGallery gallery);
 
     List<GalleryItemDto> toGalleryDtoList(List<MetierGallery> gallery);
-
-    /** URL de la photo de couverture, ou {@code null} si l'enseigne n'en a pas. */
-    default String coverUrl(Metier metier) {
-        return metier.getCover() != null ? "/api/media/" + metier.getCover().getId() : null;
-    }
 
     @Named("categorySlugs")
     default Set<String> categorySlugs(Set<Category> categories) {

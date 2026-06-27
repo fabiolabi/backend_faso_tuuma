@@ -59,7 +59,7 @@ public class ServiceRatingController {
     }
 
     @Operation(summary = "Mes avis (toutes prestations confondues)")
-    @GetMapping("/api/client/ratings")
+    @GetMapping("/api/client/service-ratings")
     public Page<ServiceRatingDto> mine(
             @AuthenticationPrincipal AuthPrincipal principal,
             @RequestParam(defaultValue = "0") int page,

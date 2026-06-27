@@ -22,6 +22,7 @@
 		<springdoc.version>2.8.17</springdoc.version>
 		<firebase-admin.version>9.9.0</firebase-admin.version>
 		<jjwt.version>0.12.6</jjwt.version>
+		<aws.sdk.version>2.29.52</aws.sdk.version>
 	</properties>
 
 	<dependencies>
@@ -112,6 +113,13 @@
 			<groupId>com.google.firebase</groupId>
 			<artifactId>firebase-admin</artifactId>
 			<version>${firebase-admin.version}</version>
+		</dependency>
+
+		<!-- Cloudflare R2 (API S3-compatible) -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>${aws.sdk.version}</version>
 		</dependency>
 
 		<!-- Lombok -->

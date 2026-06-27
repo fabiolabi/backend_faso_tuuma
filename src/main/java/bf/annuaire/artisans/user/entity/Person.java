@@ -39,6 +39,10 @@ public class Person {
     @Column(name = "photo_file_id")
     private Long photoFileId;
 
+    /** Ville ou quartier (profil mobile). */
+    @Column(name = "city")
+    private String city;
+
     public Person(String lastname, String firstname, String email) {
         this.lastname = lastname;
         this.firstname = firstname;

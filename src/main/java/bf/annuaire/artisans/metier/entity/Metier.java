@@ -77,6 +77,19 @@ public class Metier extends AbstractAuditingEntity {
     @Column(name = "embedding_updated_at")
     private java.time.Instant embeddingUpdatedAt;
 
+    /** Note agrégée (avis clients approuvés, recalculée par l'IA). */
+    @Column(name = "rating_avg", nullable = false, precision = 2, scale = 1)
+    private BigDecimal ratingAvg = BigDecimal.ZERO;
+
+    @Column(name = "rating_count", nullable = false)
+    private int ratingCount = 0;
+
+    @Column(name = "ai_summary", columnDefinition = "TEXT")
+    private String aiSummary;
+
+    @Column(name = "ai_summary_updated_at")
+    private java.time.Instant aiSummaryUpdatedAt;
+
     @Column(name = "is_published", nullable = false)
     private boolean published = false;
 
