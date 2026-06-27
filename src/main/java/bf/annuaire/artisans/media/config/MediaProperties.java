@@ -139,6 +139,9 @@ public class MediaProperties {
 
         private String region = "auto";
 
+        /** Crée le bucket au démarrage s'il n'existe pas encore. */
+        private boolean autoCreateBucket = false;
+
     }
 
 }
