@@ -10,6 +10,7 @@ import bf.annuaire.artisans.ai.client.HeuristicAiClient;
 import bf.annuaire.artisans.ai.client.ReviewAssessment;
 import bf.annuaire.artisans.client.rating.entity.RatingStatus;
 import bf.annuaire.artisans.client.rating.entity.ServiceRating;
+import bf.annuaire.artisans.client.rating.repository.MetierRatingRepository;
 import bf.annuaire.artisans.client.rating.repository.ServiceRatingRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,11 @@ import org.junit.jupiter.api.Test;
 class ReviewAnalysisServiceTest {
 
     private final ServiceRatingRepository repository = mock(ServiceRatingRepository.class);
+    private final MetierRatingRepository metierRatingRepository = mock(MetierRatingRepository.class);
+
+    private ReviewAnalysisService service(GeminiClient client) {
+        return new ReviewAnalysisService(client, repository, metierRatingRepository);
+    }
 
     private ServiceRating persisted(ServiceRating rating) {
         when(repository.findById(1L)).thenReturn(Optional.of(rating));
@@ -38,7 +44,7 @@ class ReviewAnalysisServiceTest {
     @Test
     void profanityIsRejectedAndExcludedFromTheNote() {
         ServiceRating r = persisted(rating(5, "travail de con, vraiment nul"));
-        new ReviewAnalysisService(new HeuristicAiClient(), repository).analyze(1L);
+        service(new HeuristicAiClient()).analyze(1L);
 
         assertThat(r.isInappropriate()).isTrue();
         assertThat(r.getStatus()).isEqualTo(RatingStatus.REJECTED);
@@ -49,7 +55,7 @@ class ReviewAnalysisServiceTest {
     @Test
     void cleanReviewIsApprovedWithFullWeight() {
         ServiceRating r = persisted(rating(5, "très bon travail, je recommande"));
-        new ReviewAnalysisService(new HeuristicAiClient(), repository).analyze(1L);
+        service(new HeuristicAiClient()).analyze(1L);
 
         assertThat(r.getStatus()).isEqualTo(RatingStatus.APPROVED);
         assertThat(r.isMismatch()).isFalse();
@@ -63,7 +69,7 @@ class ReviewAnalysisServiceTest {
                 .thenReturn(new ReviewAssessment(1, "NEGATIVE", -0.9, false, false, "texte très négatif"));
         ServiceRating r = persisted(rating(5, "c'était horrible, à éviter"));
 
-        new ReviewAnalysisService(contradicting, repository).analyze(1L);
+        service(contradicting).analyze(1L);
 
         assertThat(r.isMismatch()).isTrue();
         assertThat(r.getAiRating()).isEqualTo((short) 1);
@@ -74,7 +80,7 @@ class ReviewAnalysisServiceTest {
     @Test
     void blankCommentApprovedWithStarAsAiRating() {
         ServiceRating r = persisted(rating(4, "   "));
-        new ReviewAnalysisService(new HeuristicAiClient(), repository).analyze(1L);
+        service(new HeuristicAiClient()).analyze(1L);
 
         assertThat(r.getStatus()).isEqualTo(RatingStatus.APPROVED);
         assertThat(r.getAiRating()).isEqualTo((short) 4);

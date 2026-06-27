@@ -16,7 +16,7 @@ RUN mvn -B dependency:go-offline
 
 # Code source puis build du jar (tests ignorés : exécutés hors image).
 COPY src ./src
-RUN mvn -B clean package -DskipTests
+RUN mvn -B clean package -Dmaven.test.skip=true
 
 # ---- Stage runtime ----
 FROM eclipse-temurin:21-jre
