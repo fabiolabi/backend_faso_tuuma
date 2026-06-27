@@ -5,6 +5,7 @@ import bf.annuaire.artisans.auth.repository.PasswordResetCodeRepository;
 import bf.annuaire.artisans.auth.security.AuthProperties;
 import bf.annuaire.artisans.auth.security.Tokens;
 import bf.annuaire.artisans.common.exception.BadRequestException;
+import bf.annuaire.artisans.common.util.PhoneUtils;
 import bf.annuaire.artisans.user.entity.User;
 import bf.annuaire.artisans.user.repository.UserRepository;
 import java.time.Instant;
@@ -16,11 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Réinitialisation du mot de passe par code à 6 chiffres envoyé par email.
+ * Réinitialisation du mot de passe par code OTP à 6 chiffres envoyé par SMS (AQILAS).
  *
- * <p>La demande ne révèle jamais si l'email existe (anti-énumération) : la réponse est identique
- * qu'un compte corresponde ou non. La confirmation vérifie le code (hashé, non expiré, non consommé),
- * change le mot de passe, consomme le code et révoque les sessions actives.
+ * <p>La demande ne révèle jamais si le téléphone existe (anti-énumération). La confirmation vérifie
+ * le code (hashé, non expiré, non consommé), change le mot de passe et révoque les sessions actives.
  */
 @Service
 @Slf4j
@@ -30,16 +30,16 @@ public class PasswordResetService {
     private final UserRepository userRepository;
     private final PasswordResetCodeRepository resetCodeRepository;
     private final RefreshTokenService refreshTokenService;
-    private final MailService mailService;
+    private final SmsOtpService smsOtpService;
     private final PasswordEncoder passwordEncoder;
     private final AuthProperties properties;
 
-    /** Génère et envoie un code de réinitialisation si un compte correspond à l'email (silencieux sinon). */
+    /** Génère et envoie un OTP si un compte correspond au téléphone (silencieux sinon). */
     @Transactional
-    public void requestReset(String email) {
-        Optional<User> maybeUser = userRepository.findByPersonEmail(email);
+    public void requestReset(String phone) {
+        Optional<User> maybeUser = findUserByPhone(phone);
         if (maybeUser.isEmpty()) {
-            log.debug("Demande de reset pour un email inconnu : {}", email);
+            log.debug("Demande de reset pour un téléphone inconnu : {}", phone);
             return;
         }
         User user = maybeUser.get();
@@ -51,18 +51,28 @@ public class PasswordResetService {
                 now.plusSeconds(properties.getPasswordReset().getCodeTtlSeconds()),
                 now);
         resetCodeRepository.save(entity);
-        mailService.sendPasswordResetCode(email, code);
+        try {
+            smsOtpService.sendPasswordResetCode(
+                    user.getPhone(), code, properties.getPasswordReset().getCodeTtlSeconds());
+            log.info("OTP reset envoyé par SMS → userId={}", user.getId());
+        } catch (RuntimeException e) {
+            log.error("Échec envoi OTP reset → userId={} : {}", user.getId(), e.getMessage());
+            String detail = e.getMessage();
+            if (detail != null && !detail.isBlank() && !detail.equals("Envoi SMS impossible.")) {
+                throw new BadRequestException(detail);
+            }
+            throw new BadRequestException("Impossible d'envoyer le SMS. Réessayez plus tard.");
+        }
     }
 
     /**
-     * Vérifie le code et change le mot de passe.
+     * Vérifie le code OTP et change le mot de passe.
      *
      * @throws BadRequestException si le code est invalide, expiré ou déjà utilisé.
      */
     @Transactional
-    public void confirmReset(String email, String code, String newPassword) {
-        User user = userRepository
-                .findByPersonEmail(email)
+    public void confirmReset(String phone, String code, String newPassword) {
+        User user = findUserByPhone(phone)
                 .orElseThrow(() -> new BadRequestException("Code de réinitialisation invalide."));
 
         PasswordResetCode resetCode = resetCodeRepository
@@ -74,5 +84,16 @@ public class PasswordResetService {
         user.getCredential().setPasswordHash(passwordEncoder.encode(newPassword));
         resetCode.setConsumedAt(Instant.now());
         refreshTokenService.revokeAllForUser(user.getId());
+        log.info("Mot de passe réinitialisé → userId={}", user.getId());
+    }
+
+    private Optional<User> findUserByPhone(String raw) {
+        for (String variant : PhoneUtils.lookupVariants(raw)) {
+            Optional<User> user = userRepository.findByPhone(variant);
+            if (user.isPresent()) {
+                return user;
+            }
+        }
+        return Optional.empty();
     }
 }
