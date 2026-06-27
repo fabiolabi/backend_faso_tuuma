@@ -1,7 +1,9 @@
 package bf.annuaire.artisans.common.exception;
 
+import bf.annuaire.artisans.media.service.MediaStorageException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -25,17 +27,20 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
  * conservent leur statut HTTP correct au lieu d'être uniformisées en 500.
  */
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     // ---------- Exceptions métier ----------
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(ResourceNotFoundException ex, WebRequest request) {
+        log.warn("404 {} — {}", path(request), ex.getMessage());
         return build(HttpStatus.NOT_FOUND, ex.getMessage(), request);
     }
 
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ApiError> handleBadRequest(BadRequestException ex, WebRequest request) {
+        log.warn("400 {} — {}", path(request), ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
     }
 
@@ -52,28 +57,45 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "La validation de la requête a échoué.",
                 path(request),
                 fieldErrors);
+        log.warn("400 {} — validation échouée ({} champ(s))", path(request), fieldErrors.size());
         return ResponseEntity.badRequest().body(body);
     }
 
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ApiError> handleUnauthorized(UnauthorizedException ex, WebRequest request) {
+        log.warn("401 {} — {}", path(request), ex.getMessage());
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
     }
 
     /** Échec d'authentification Spring Security (mauvais identifiants, compte désactivé…) -> 401. */
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiError> handleAuthentication(AuthenticationException ex, WebRequest request) {
+        log.warn("401 {} — authentification refusée: {}", path(request), ex.getMessage());
         return build(HttpStatus.UNAUTHORIZED, "Identifiants invalides.", request);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
+        log.warn("403 {} — {}", path(request), ex.getMessage());
         return build(HttpStatus.FORBIDDEN, "Accès refusé.", request);
+    }
+
+    @ExceptionHandler(MediaStorageException.class)
+    public ResponseEntity<ApiError> handleMediaStorage(MediaStorageException ex, WebRequest request) {
+        log.error("500 {} — stockage media: {}", path(request), ex.getMessage(), ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur de stockage du fichier.", request);
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex, WebRequest request) {
+        log.error("500 {} — configuration: {}", path(request), ex.getMessage(), ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request);
     }
 
     /** Filet de sécurité : toute exception non prévue devient un 500 propre. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpected(Exception ex, WebRequest request) {
+        log.error("500 {} — erreur interne: {}", path(request), ex.getMessage(), ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Une erreur interne est survenue.", request);
     }
 
@@ -95,6 +117,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "La validation de la requête a échoué.",
                 path(request),
                 fieldErrors);
+        log.warn("400 {} — validation @Valid échouée ({} champ(s))", path(request), fieldErrors.size());
         return new ResponseEntity<>(body, headers, status);
     }
 
@@ -110,6 +133,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 HttpStatus.PAYLOAD_TOO_LARGE.getReasonPhrase(),
                 "Fichier trop volumineux (max 5 Mo).",
                 path(request));
+        log.warn("413 {} — fichier trop volumineux", path(request));
         return new ResponseEntity<>(body, headers, HttpStatus.PAYLOAD_TOO_LARGE);
     }
 
@@ -127,6 +151,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         HttpStatus status = HttpStatus.resolve(statusCode.value());
         String reason = status != null ? status.getReasonPhrase() : "Error";
         ApiError apiError = ApiError.of(statusCode.value(), reason, ex.getMessage(), path(request));
+        if (statusCode.is4xxClientError()) {
+            log.warn("{} {} — {}", statusCode.value(), path(request), ex.getMessage());
+        } else {
+            log.error("{} {} — {}", statusCode.value(), path(request), ex.getMessage(), ex);
+        }
         return new ResponseEntity<>(apiError, headers, statusCode);
     }
 

@@ -12,6 +12,7 @@ import bf.annuaire.artisans.user.repository.UserRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
  * {@link MediaStorageBackend}, persistance de la ligne {@code media_file}, lecture et suppression.
  */
 @Service
+@Slf4j
 public class MediaService {
 
     /** Extension de fichier dérivée du type MIME (seuls ces types sont autorisés). */
@@ -60,14 +62,25 @@ public class MediaService {
     @Transactional
     public MediaFile upload(MultipartFile file, Long userId) {
         if (file == null || file.isEmpty()) {
+            log.warn("Upload refusé — userId={}, fichier vide", userId);
             throw new BadRequestException("Aucun fichier fourni.");
         }
         String contentType = resolveContentType(file);
         if (!properties.getAllowedContentTypes().contains(contentType)) {
+            log.warn(
+                    "Upload refusé — userId={}, type={}, nom={}",
+                    userId,
+                    contentType,
+                    file.getOriginalFilename());
             throw new BadRequestException(
                     "Type de fichier non autorisé. Formats acceptés : JPEG, PNG, WebP, GIF, HEIC.");
         }
         if (file.getSize() > properties.getMaxFileSizeBytes()) {
+            log.warn(
+                    "Upload refusé — userId={}, taille={} octets (max {})",
+                    userId,
+                    file.getSize(),
+                    properties.getMaxFileSizeBytes());
             throw new BadRequestException(
                     "Fichier trop volumineux (max " + properties.getMaxFileSizeBytes() + " octets).");
         }
@@ -80,6 +93,7 @@ public class MediaService {
                     contentType,
                     file.getSize());
         } catch (IOException e) {
+            log.error("Upload échoué — userId={}, lecture impossible", userId, e);
             throw new BadRequestException("Lecture du fichier impossible.");
         }
 
@@ -92,9 +106,18 @@ public class MediaService {
                     file.getSize(),
                     uploader,
                     Instant.now());
-            return mediaFileRepository.save(mediaFile);
+            MediaFile saved = mediaFileRepository.save(mediaFile);
+            log.info(
+                    "Upload OK — id={}, userId={}, backend={}, path={}, type={}, size={}",
+                    saved.getId(),
+                    userId,
+                    properties.getBackend(),
+                    storedPath,
+                    contentType,
+                    file.getSize());
+            return saved;
         } catch (RuntimeException e) {
-            // Évite un binaire orphelin si la persistance échoue.
+            log.error("Upload échoué — userId={}, rollback binaire path={}", userId, storedPath, e);
             storage.delete(storedPath);
             throw e;
         }
@@ -111,6 +134,7 @@ public class MediaService {
     @Transactional(readOnly = true)
     public MediaContent loadContent(Long id) {
         MediaFile mediaFile = getMetadata(id);
+        log.debug("Lecture media id={}, path={}", id, mediaFile.getStoredPath());
         return new MediaContent(mediaFile, storage.loadAsResource(mediaFile.getStoredPath()));
     }
 
@@ -123,10 +147,15 @@ public class MediaService {
     public void delete(Long id, AuthPrincipal principal) {
         MediaFile mediaFile = getMetadata(id);
         if (!isOwnerOrAdmin(mediaFile, principal)) {
+            log.warn(
+                    "Suppression refusée — mediaId={}, userId={}",
+                    id,
+                    principal.userId());
             throw new AccessDeniedException("Suppression non autorisée.");
         }
         mediaFileRepository.delete(mediaFile);
         storage.delete(mediaFile.getStoredPath());
+        log.info("Media supprimé — id={}, path={}, userId={}", id, mediaFile.getStoredPath(), principal.userId());
     }
 
     private boolean isOwnerOrAdmin(MediaFile mediaFile, AuthPrincipal principal) {

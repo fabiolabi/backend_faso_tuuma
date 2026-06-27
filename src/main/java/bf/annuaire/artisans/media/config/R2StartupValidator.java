@@ -53,6 +53,12 @@ public class R2StartupValidator implements ApplicationRunner {
             s3Client.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
             log.info("Bucket R2 '{}' créé.", bucket);
         } catch (S3Exception e) {
+            log.error(
+                    "Connexion R2 échouée — bucket={}, endpoint={}, awsError={}",
+                    bucket,
+                    endpoint,
+                    e.awsErrorDetails(),
+                    e);
             throw new IllegalStateException(
                     "Connexion R2 échouée (bucket=" + bucket + ", endpoint=" + endpoint + "). "
                             + "Vérifiez R2_BUCKET, R2_ENDPOINT et les clés API.",

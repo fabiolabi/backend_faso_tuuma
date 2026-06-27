@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -29,6 +30,7 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
  */
 @Component
 @ConditionalOnProperty(prefix = "app.media", name = "backend", havingValue = "r2")
+@Slf4j
 public class R2MediaStorage implements MediaStorageBackend {
 
     private static final DateTimeFormatter SHARD =
@@ -52,7 +54,9 @@ public class R2MediaStorage implements MediaStorageBackend {
                     .contentType(contentType)
                     .build();
             s3Client.putObject(request, RequestBody.fromInputStream(content, sizeBytes));
+            log.info("R2 putObject OK — bucket={}, key={}, size={}", bucket, key, sizeBytes);
         } catch (Exception e) {
+            log.error("R2 putObject échoué — bucket={}, key={}, size={}", bucket, key, sizeBytes, e);
             throw new MediaStorageException("Échec de l'upload vers R2 : " + key, e);
         }
         return key;
@@ -67,8 +71,15 @@ public class R2MediaStorage implements MediaStorageBackend {
                     .build());
             return new InputStreamResource(response);
         } catch (NoSuchKeyException e) {
+            log.warn("R2 getObject — clé introuvable bucket={}, key={}", bucket, relativePath);
             throw new MediaStorageException("Fichier introuvable sur R2 : " + relativePath, e);
         } catch (S3Exception e) {
+            log.error(
+                    "R2 getObject échoué — bucket={}, key={}, awsError={}",
+                    bucket,
+                    relativePath,
+                    e.awsErrorDetails(),
+                    e);
             throw new MediaStorageException("Échec de la lecture depuis R2 : " + relativePath, e);
         }
     }
@@ -81,6 +92,12 @@ public class R2MediaStorage implements MediaStorageBackend {
                     .key(relativePath)
                     .build());
         } catch (S3Exception e) {
+            log.error(
+                    "R2 deleteObject échoué — bucket={}, key={}, awsError={}",
+                    bucket,
+                    relativePath,
+                    e.awsErrorDetails(),
+                    e);
             throw new MediaStorageException("Échec de la suppression sur R2 : " + relativePath, e);
         }
     }

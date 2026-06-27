@@ -1,6 +1,7 @@
 package bf.annuaire.artisans.media.config;
 
 import java.net.URI;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,11 +17,18 @@ import software.amazon.awssdk.services.s3.S3Configuration;
  */
 @Configuration
 @ConditionalOnProperty(prefix = "app.media", name = "backend", havingValue = "r2")
+@Slf4j
 public class R2ClientConfig {
 
     @Bean(destroyMethod = "close")
     S3Client r2S3Client(MediaProperties properties) {
+        R2Settings.normalize(properties);
         validateR2Config(properties);
+        log.info(
+                "Initialisation client R2 — bucket={}, endpoint={}, region={}",
+                properties.getR2().getBucket(),
+                properties.getR2().getEndpoint(),
+                properties.getR2().getRegion());
         return S3Client.builder()
                 .endpointOverride(URI.create(properties.getR2().getEndpoint()))
                 .region(Region.of(properties.getR2().getRegion()))

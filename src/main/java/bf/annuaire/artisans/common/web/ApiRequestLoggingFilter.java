@@ -1,0 +1,39 @@
+package bf.annuaire.artisans.common.web;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+/**
+ * Log des requêtes API terminées en erreur (status ≥ 400) pour faciliter le diagnostic prod.
+ */
+@Component
+@Slf4j
+public class ApiRequestLoggingFilter extends OncePerRequestFilter {
+
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        long start = System.currentTimeMillis();
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            int status = response.getStatus();
+            if (status >= 400 && request.getRequestURI().startsWith("/api")) {
+                long ms = System.currentTimeMillis() - start;
+                log.warn(
+                        "API {} {} → {} ({} ms)",
+                        request.getMethod(),
+                        request.getRequestURI(),
+                        status,
+                        ms);
+            }
+        }
+    }
+}
