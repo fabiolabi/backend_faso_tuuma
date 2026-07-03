@@ -32,9 +32,9 @@ public class AiConfig {
         return executor;
     }
 
-    /** Client REST Gemini (base URL configurable, timeouts courts pour ne pas saturer le pool). */
+    /** Client HTTP vers l'API Gemini (base URL configurable, timeouts courts). */
     @Bean
-    public RestClient geminiRestClient(AiProperties properties) {
+    public RestClient geminiHttpClient(AiProperties properties) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(5));
         factory.setReadTimeout(Duration.ofSeconds(30));

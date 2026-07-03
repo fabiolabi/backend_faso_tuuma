@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -24,8 +25,9 @@ public class GeminiRestClient implements GeminiClient {
     private final ObjectMapper mapper;
     private final AiProperties properties;
 
-    public GeminiRestClient(RestClient geminiRestClient, ObjectMapper mapper, AiProperties properties) {
-        this.gemini = geminiRestClient;
+    public GeminiRestClient(
+            @Qualifier("geminiHttpClient") RestClient gemini, ObjectMapper mapper, AiProperties properties) {
+        this.gemini = gemini;
         this.mapper = mapper;
         this.properties = properties;
     }
