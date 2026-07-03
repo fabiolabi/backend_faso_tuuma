@@ -1,6 +1,7 @@
 package bf.annuaire.artisans.metier.repository;
 
 import bf.annuaire.artisans.metier.entity.Metier;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -28,18 +29,22 @@ public interface MetierRepository extends JpaRepository<Metier, Long> {
     @EntityGraph(attributePaths = {"address", "cover", "categories"})
     Page<Metier> findByOwnerId(Long ownerId, Pageable pageable);
 
+    /** Commerces visibles en recherche (publiés et actifs). */
+    @EntityGraph(attributePaths = {"owner"})
+    List<Metier> findByPublishedTrueAndActiveTrue();
+
+    /** Enseignes pour affichage liste (adresse, couverture, catégories) — une requête batch. */
+    @EntityGraph(attributePaths = {"address", "cover", "categories"})
+    List<Metier> findSummariesByIdIn(Collection<Long> ids);
+
     /**
-     * Recherche de proximité (SQL natif, portable H2/PostgreSQL). Ne renvoie que les enseignes
-     * publiées et actives. Tous les filtres sont optionnels via le motif {@code (:p IS NULL OR …)}.
-     *
-     * <p>Quand {@code lat}/{@code lng} sont fournis : tri par distance Haversine croissante (et filtre
-     * par {@code radiusKm} si présent) ; sinon tri par nom. Le {@code CASE} renvoie {@code 0} (et non
-     * {@code NULL}) en l'absence de position pour rester typé sous H2.
+     * Recherche de proximité : renvoie uniquement les IDs (évite de charger {@code search_embedding}
+     * et les associations lazy ligne par ligne).
      */
     @Query(
             value =
                     """
-                    SELECT m.* FROM metier m
+                    SELECT m.id FROM metier m
                     WHERE m.is_published = TRUE AND m.is_active = TRUE
                       AND (:q IS NULL OR LOWER(m.name) LIKE LOWER(CONCAT('%', :q, '%')))
                       AND (:categorySlug IS NULL OR EXISTS (
@@ -79,7 +84,7 @@ public interface MetierRepository extends JpaRepository<Metier, Long> {
                                 + sin(radians(:lat)) * sin(radians(m.gps_lat)))) <= :radiusKm))
                     """,
             nativeQuery = true)
-    Page<Metier> search(
+    Page<Long> searchIds(
             @Param("q") String q,
             @Param("categorySlug") String categorySlug,
             @Param("lat") Double lat,

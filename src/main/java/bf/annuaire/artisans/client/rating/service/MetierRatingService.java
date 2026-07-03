@@ -71,13 +71,13 @@ public class MetierRatingService {
             throw new ResourceNotFoundException("Commerce introuvable : " + metierId);
         }
         return ratingRepository
-                .findByMetierIdAndStatus(metierId, RatingStatus.APPROVED, pageable)
+                .findWithDetailsByMetierIdAndStatus(metierId, RatingStatus.APPROVED, pageable)
                 .map(ratingMapper::toDto);
     }
 
     @Transactional(readOnly = true)
     public Page<MetierRatingDto> listMine(AuthPrincipal principal, Pageable pageable) {
-        return ratingRepository.findByClientId(principal.userId(), pageable).map(ratingMapper::toDto);
+        return ratingRepository.findWithDetailsByClientId(principal.userId(), pageable).map(ratingMapper::toDto);
     }
 
     private Metier loadVisibleMetier(Long metierId) {

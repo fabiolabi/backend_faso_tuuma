@@ -3,6 +3,8 @@ package bf.annuaire.artisans.common.security;
 import bf.annuaire.artisans.auth.security.AppUserDetailsService;
 import bf.annuaire.artisans.auth.security.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;
+import bf.annuaire.artisans.dev.DevProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -26,6 +28,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  */
 @Configuration
 @EnableMethodSecurity
+@EnableConfigurationProperties(DevProperties.class)
 public class SecurityConfig {
 
     /** Endpoints accessibles sans authentification. */
@@ -43,6 +46,7 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ANY = {
         "/api/auth/**", // login / refresh / reset password
+        "/api/dev/**", // seed de démo (protégé par token côté contrôleur)
         "/v3/api-docs/**",
         "/swagger-ui/**",
         "/swagger-ui.html",

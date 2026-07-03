@@ -5,6 +5,7 @@ import bf.annuaire.artisans.metier.entity.Category;
 import bf.annuaire.artisans.metier.entity.Metier;
 import bf.annuaire.artisans.metier.dto.MetierSummaryDto;
 import bf.annuaire.artisans.metier.mapper.MetierMapper;
+import bf.annuaire.artisans.metier.service.MetierHydrationService;
 import bf.annuaire.artisans.metier.repository.CategoryRepository;
 import bf.annuaire.artisans.search.dto.SearchCriteria;
 import bf.annuaire.artisans.search.dto.SearchSuggestionDto;
@@ -24,28 +25,29 @@ import org.springframework.transaction.annotation.Transactional;
  * Recherche transverse de l'annuaire (lecture seule). Réutilise l'agrégat {@code metier} :
  * {@link MetierMapper} pour la vue résumée, {@link GeoUtils} pour la distance et {@link Metier}/
  * {@link Category} comme sources. Le tri par proximité est fait en SQL natif (cf.
- * {@link SearchRepository#search}) ; le service ne fait qu'enrichir le {@code distanceKm} affiché.
+ * {@link SearchRepository#searchIds}) ; le service ne fait qu'enrichir le {@code distanceKm} affiché.
  */
 @Service
 @RequiredArgsConstructor
 public class SearchService {
 
     private final SearchRepository searchRepository;
+    private final MetierHydrationService metierHydration;
     private final CategoryRepository categoryRepository;
     private final MetierMapper metierMapper;
 
     /** Recherche transverse paginée (enseignes publiées et actives uniquement). */
     @Transactional(readOnly = true)
     public Page<MetierSummaryDto> search(SearchCriteria criteria, Pageable pageable) {
-        return searchRepository
-                .search(
+        return metierHydration.mapIdPage(
+                searchRepository.searchIds(
                         criteria.q(),
                         criteria.categorySlug(),
                         criteria.lat(),
                         criteria.lng(),
                         criteria.radiusKm(),
-                        pageable)
-                .map(metier -> metierMapper.toSummary(metier, distanceFor(metier, criteria)));
+                        pageable),
+                metier -> metierMapper.toSummary(metier, distanceFor(metier, criteria)));
     }
 
     /**

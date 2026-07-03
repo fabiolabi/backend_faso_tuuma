@@ -2,6 +2,8 @@ package bf.annuaire.artisans.client.messaging.repository;
 
 import bf.annuaire.artisans.client.messaging.entity.Message;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +18,27 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     Page<Message> findByConversationIdOrderBySentAtDesc(Long conversationId, Pageable pageable);
 
     Optional<Message> findTop1ByConversationIdOrderBySentAtDesc(Long conversationId);
+
+    @Query(
+            """
+            SELECT m FROM Message m
+            WHERE m.conversation.id IN :ids
+              AND m.sentAt = (
+                  SELECT MAX(m2.sentAt) FROM Message m2 WHERE m2.conversation.id = m.conversation.id
+              )
+            """)
+    List<Message> findLatestByConversationIdIn(@Param("ids") Collection<Long> ids);
+
+    @Query(
+            """
+            SELECT m.conversation.id, COUNT(m) FROM Message m
+            WHERE m.conversation.id IN :ids
+              AND m.sender.id <> :readerId
+              AND m.readAt IS NULL
+            GROUP BY m.conversation.id
+            """)
+    List<Object[]> countUnreadByConversationIds(
+            @Param("ids") Collection<Long> ids, @Param("readerId") Long readerId);
 
     /** Nombre de messages non lus pour un lecteur (ceux qu'il n'a pas envoyés et sans {@code read_at}). */
     long countByConversationIdAndSender_IdNotAndReadAtIsNull(Long conversationId, Long readerId);

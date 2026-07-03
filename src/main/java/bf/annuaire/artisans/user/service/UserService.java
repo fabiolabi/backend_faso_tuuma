@@ -13,6 +13,8 @@ import bf.annuaire.artisans.user.entity.UserCredential;
 import bf.annuaire.artisans.user.repository.PersonRepository;
 import bf.annuaire.artisans.user.repository.RoleRepository;
 import bf.annuaire.artisans.user.repository.UserRepository;
+import java.util.EnumMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,8 @@ public class UserService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
+
+    private volatile Map<RoleName, Role> roleCache;
 
     /**
      * Crée un utilisateur complet (état civil, secrets, rôle) dans une transaction. Vérifie l'unicité
@@ -54,9 +58,7 @@ public class UserService {
             throw new BadRequestException("Cette adresse email est déjà utilisée.");
         }
 
-        Role role = roleRepository
-                .findByName(roleName)
-                .orElseThrow(() -> new ResourceNotFoundException("Rôle introuvable : " + roleName));
+        Role role = resolveRole(roleName);
 
         Person person = new Person(lastname, firstname, StringUtils.hasText(email) ? email : null);
 
@@ -87,9 +89,7 @@ public class UserService {
         if (alreadyHas) {
             return user;
         }
-        Role role = roleRepository
-                .findByName(roleName)
-                .orElseThrow(() -> new ResourceNotFoundException("Rôle introuvable : " + roleName));
+        Role role = resolveRole(roleName);
         user.addRole(role);
         return userRepository.save(user);
     }
@@ -119,5 +119,27 @@ public class UserService {
         person.setCity(StringUtils.hasText(request.city()) ? request.city().trim() : null);
         userRepository.save(user);
         return userMapper.toDto(user);
+    }
+
+    private Role resolveRole(RoleName roleName) {
+        Map<RoleName, Role> cache = roleCache;
+        if (cache == null) {
+            synchronized (this) {
+                cache = roleCache;
+                if (cache == null) {
+                    EnumMap<RoleName, Role> loaded = new EnumMap<>(RoleName.class);
+                    for (Role role : roleRepository.findAll()) {
+                        loaded.put(role.getName(), role);
+                    }
+                    roleCache = loaded;
+                    cache = loaded;
+                }
+            }
+        }
+        Role role = cache.get(roleName);
+        if (role == null) {
+            throw new ResourceNotFoundException("Rôle introuvable : " + roleName);
+        }
+        return role;
     }
 }

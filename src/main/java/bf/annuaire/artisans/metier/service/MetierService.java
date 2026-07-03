@@ -31,7 +31,6 @@ import bf.annuaire.artisans.metier.entity.MetierSocialMedia;
 import bf.annuaire.artisans.metier.mapper.CategoryMapper;
 import bf.annuaire.artisans.metier.mapper.MetierMapper;
 import bf.annuaire.artisans.metier.mapper.ServiceMapper;
-import bf.annuaire.artisans.metier.repository.AddressRepository;
 import bf.annuaire.artisans.metier.repository.CategoryRepository;
 import bf.annuaire.artisans.metier.repository.HourlyRepository;
 import bf.annuaire.artisans.metier.repository.MetierGalleryRepository;
@@ -45,7 +44,10 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -64,7 +66,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MetierService {
 
     private final MetierRepository metierRepository;
-    private final AddressRepository addressRepository;
+    private final MetierHydrationService metierHydration;
     private final CategoryRepository categoryRepository;
     private final ServiceRepository serviceRepository;
     private final HourlyRepository hourlyRepository;
@@ -84,15 +86,15 @@ public class MetierService {
     /** Recherche de proximité paginée (enseignes publiées et actives uniquement). */
     @Transactional(readOnly = true)
     public Page<MetierSummaryDto> search(MetierSearchCriteria criteria, Pageable pageable) {
-        return metierRepository
-                .search(
+        return metierHydration.mapIdPage(
+                metierRepository.searchIds(
                         criteria.q(),
                         criteria.categorySlug(),
                         criteria.lat(),
                         criteria.lng(),
                         criteria.radiusKm(),
-                        pageable)
-                .map(metier -> metierMapper.toSummary(metier, distanceFor(metier, criteria)));
+                        pageable),
+                metier -> metierMapper.toSummary(metier, distanceFor(metier, criteria)));
     }
 
     /** Enseignes du propriétaire courant (publiées ou non). */
@@ -124,8 +126,9 @@ public class MetierService {
         metier.setOwner(userRepository.getReferenceById(principal.userId()));
         applyWritableFields(metier, request);
         Metier saved = metierRepository.save(metier);
+        List<MetierPhoneDto> phones = savePhonesOnCreate(saved, request.phones());
         events.publishEvent(new MetierContentChangedEvent(saved.getId()));
-        return toDetail(saved);
+        return toDetailFromSaved(saved, phones);
     }
 
     @Transactional
@@ -149,8 +152,7 @@ public class MetierService {
         metier.setGpsLat(request.gpsLat());
         metier.setGpsLng(request.gpsLng());
         if (request.address() != null) {
-            Address target = metier.getAddress() != null ? metier.getAddress() : new Address();
-            metier.setAddress(saveAddress(target, request.address()));
+            applyAddress(metier, request.address());
         }
         if (request.categoryIds() != null) {
             metier.setCategories(resolveCategories(request.categoryIds()));
@@ -364,22 +366,51 @@ public class MetierService {
         return metier;
     }
 
-    private Address saveAddress(Address target, bf.annuaire.artisans.metier.dto.AddressDto dto) {
+    private void applyAddress(Metier metier, bf.annuaire.artisans.metier.dto.AddressDto dto) {
+        Address target = metier.getAddress() != null ? metier.getAddress() : new Address();
         target.setCity(dto.city());
         target.setDistrict(dto.district());
         target.setSector(dto.sector());
         target.setStreet(dto.street());
-        return addressRepository.save(target);
+        metier.setAddress(target);
     }
 
     private Set<Category> resolveCategories(Set<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return new LinkedHashSet<>();
+        }
+        List<Category> found = categoryRepository.findAllById(ids);
+        Map<Long, Category> byId =
+                found.stream().collect(Collectors.toMap(Category::getId, Function.identity()));
         Set<Category> result = new LinkedHashSet<>();
         for (Long categoryId : ids) {
-            result.add(categoryRepository
-                    .findById(categoryId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Catégorie introuvable : " + categoryId)));
+            Category category = byId.get(categoryId);
+            if (category == null) {
+                throw new ResourceNotFoundException("Catégorie introuvable : " + categoryId);
+            }
+            result.add(category);
         }
         return result;
+    }
+
+    private List<MetierPhoneDto> savePhonesOnCreate(Metier metier, List<MetierPhoneDto> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        List<MetierPhoneDto> saved = new java.util.ArrayList<>();
+        for (MetierPhoneDto item : items) {
+            if (item.number() == null || item.number().isBlank()) {
+                throw new BadRequestException("Numéro obligatoire pour chaque téléphone.");
+            }
+            MetierPhone phone = new MetierPhone();
+            phone.setMetier(metier);
+            phone.setNumber(item.number());
+            phone.setWhatsapp(item.whatsapp());
+            phone.setLabel(item.label());
+            phoneRepository.save(phone);
+            saved.add(item);
+        }
+        return saved;
     }
 
     private MediaFile resolveFile(Long fileId) {
@@ -397,6 +428,32 @@ public class MetierService {
         service.setPriceMin(request.priceMin());
         service.setPriceMax(request.priceMax());
         service.setActive(request.active() == null || request.active());
+    }
+
+    private MetierDetailDto toDetailFromSaved(Metier metier, List<MetierPhoneDto> phones) {
+        return new MetierDetailDto(
+                metier.getId(),
+                metier.getOwner().getId(),
+                metier.getName(),
+                phones,
+                metier.getDescription(),
+                metier.getAddressDescription(),
+                metier.getAddress() != null ? metierMapper.toAddressDto(metier.getAddress()) : null,
+                mediaUrlService.mediaUrl(metier.getCover()),
+                metier.getGpsLat(),
+                metier.getGpsLng(),
+                metier.isPublished(),
+                metier.isActive(),
+                metier.getRatingAvg(),
+                metier.getRatingCount(),
+                metier.getAiSummary(),
+                categoryMapper.toDtoList(metier.getCategories()),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                metier.getCreatedAt(),
+                metier.getUpdatedAt());
     }
 
     private MetierDetailDto toDetail(Metier metier) {

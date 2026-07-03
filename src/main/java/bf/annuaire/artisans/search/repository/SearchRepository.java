@@ -29,7 +29,7 @@ public interface SearchRepository extends JpaRepository<Metier, Long> {
     @Query(
             value =
                     """
-                    SELECT m.* FROM metier m
+                    SELECT m.id FROM metier m
                     WHERE m.is_published = TRUE AND m.is_active = TRUE
                       AND (:q IS NULL OR (
                             LOWER(m.name) LIKE LOWER(CONCAT('%', :q, '%'))
@@ -89,7 +89,7 @@ public interface SearchRepository extends JpaRepository<Metier, Long> {
                                 + sin(radians(:lat)) * sin(radians(m.gps_lat)))) <= :radiusKm))
                     """,
             nativeQuery = true)
-    Page<Metier> search(
+    Page<Long> searchIds(
             @Param("q") String q,
             @Param("categorySlug") String categorySlug,
             @Param("lat") Double lat,

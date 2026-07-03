@@ -3,6 +3,7 @@ package bf.annuaire.artisans.metier.entity;
 import bf.annuaire.artisans.common.AbstractAuditingEntity;
 import bf.annuaire.artisans.media.entity.MediaFile;
 import bf.annuaire.artisans.user.entity.User;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -49,7 +50,7 @@ public class Metier extends AbstractAuditingEntity {
     @Column(name = "name", nullable = false)
     private String name;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.PERSIST)
     @JoinColumn(name = "address_id")
     private Address address;
 

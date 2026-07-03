@@ -19,6 +19,9 @@ import bf.annuaire.artisans.user.entity.RoleName;
 import bf.annuaire.artisans.user.entity.User;
 import bf.annuaire.artisans.user.repository.UserRepository;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -71,7 +74,7 @@ public class MessagingService {
         Page<Conversation> page = "artisan".equalsIgnoreCase(box)
                 ? conversationRepository.findByMetier_Owner_IdOrderByLastMessageAtDesc(userId, pageable)
                 : conversationRepository.findByClientIdOrderByLastMessageAtDesc(userId, pageable);
-        return page.map(conversation -> toDto(conversation, userId));
+        return toDtoPage(page, userId);
     }
 
     @Transactional(readOnly = true)
@@ -130,12 +133,52 @@ public class MessagingService {
     }
 
     private ConversationDto toDto(Conversation conversation, Long readerId) {
-        String preview = messageRepository
-                .findTop1ByConversationIdOrderBySentAtDesc(conversation.getId())
-                .map(message -> truncate(message.getBody()))
-                .orElse(null);
-        long unread = messageRepository.countByConversationIdAndSender_IdNotAndReadAtIsNull(
-                conversation.getId(), readerId);
+        return toDto(
+                conversation,
+                readerId,
+                Map.of(),
+                Map.of());
+    }
+
+    private Page<ConversationDto> toDtoPage(Page<Conversation> page, Long readerId) {
+        List<Long> ids = page.getContent().stream().map(Conversation::getId).toList();
+        Map<Long, String> previews = loadPreviews(ids);
+        Map<Long, Long> unreadCounts = loadUnreadCounts(ids, readerId);
+        return page.map(conversation ->
+                toDto(conversation, readerId, previews, unreadCounts));
+    }
+
+    private Map<Long, String> loadPreviews(List<Long> conversationIds) {
+        if (conversationIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> previews = new HashMap<>();
+        for (Message message : messageRepository.findLatestByConversationIdIn(conversationIds)) {
+            previews.putIfAbsent(
+                    message.getConversation().getId(), truncate(message.getBody()));
+        }
+        return previews;
+    }
+
+    private Map<Long, Long> loadUnreadCounts(List<Long> conversationIds, Long readerId) {
+        if (conversationIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Long> counts = new HashMap<>();
+        for (Object[] row : messageRepository.countUnreadByConversationIds(conversationIds, readerId)) {
+            counts.put((Long) row[0], (Long) row[1]);
+        }
+        return counts;
+    }
+
+    private ConversationDto toDto(
+            Conversation conversation,
+            Long readerId,
+            Map<Long, String> previews,
+            Map<Long, Long> unreadCounts) {
+        Long conversationId = conversation.getId();
+        String preview = previews.getOrDefault(conversationId, null);
+        long unread = unreadCounts.getOrDefault(conversationId, 0L);
         return new ConversationDto(
                 conversation.getId(),
                 conversation.getMetier().getId(),
